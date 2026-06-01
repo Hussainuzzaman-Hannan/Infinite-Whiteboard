@@ -2,13 +2,13 @@
 // কেন: UI এর সব logic এখানে থাকবে। Screen এ শুধু UI code।
 // StateFlow use করি কারণ Compose collect করে automatically re-compose করে।
 
-package com.zayaanify.whiteboard.presentation.whiteboard
+package com.zayaanify.infinitewhiteboard.presentation.whiteboard
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yourname.whiteboard.domain.model.*
+import com.zayaanify.infinitewhiteboard.domain.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -16,7 +16,7 @@ import javax.inject.Inject
 
 // ViewModel এর সব UI state এক data class এ
 data class WhiteboardUiState(
-    val pages: List<BoardPage> = listOf(BoardPage(name = "Page 1")),
+    val pages: List<BoardPage> = emptyList(), // আইডি কনফ্লিক্ট এড়াতে ডিফল্ট লিস্ট খালি রাখা হলো
     val currentPageId: String = "",
     val canvasState: CanvasState = CanvasState(),
     val toolSettings: ToolSettings = ToolSettings(),
@@ -45,9 +45,14 @@ class WhiteboardViewModel @Inject constructor(
     val uiState: StateFlow<WhiteboardUiState> = _uiState.asStateFlow()
 
     init {
-        // প্রথম page select করো
-        val firstPageId = _uiState.value.pages.first().id
-        _uiState.update { it.copy(currentPageId = firstPageId) }
+        // রানটাইমে একটি ফিক্সড প্রথম পেজ জেনারেট করে স্টেট আপডেট করা হচ্ছে
+        val defaultPage = BoardPage(name = "Page 1", order = 0)
+        _uiState.update { state ->
+            state.copy(
+                pages = listOf(defaultPage),
+                currentPageId = defaultPage.id
+            )
+        }
     }
 
     // ─── Tool Selection ────────────────────────────────────────────────

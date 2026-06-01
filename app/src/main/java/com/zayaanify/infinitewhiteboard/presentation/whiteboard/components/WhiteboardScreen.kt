@@ -1,22 +1,31 @@
 // presentation/whiteboard/WhiteboardScreen.kt
 // কেন: সব components একত্রে এখানে compose হয়।
 
-package com.zayaanify.whiteboard.presentation.whiteboard
+package com.zayaanify.infinitewhiteboard.presentation.whiteboard
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.yourname.whiteboard.domain.model.DrawingTool
-import com.yourname.whiteboard.presentation.whiteboard.components.*
+import com.zayaanify.infinitewhiteboard.domain.model.DrawingTool
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.InfiniteCanvas
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.PagePanel
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.StrokeSizePicker
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.WhiteboardToolbar
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WhiteboardScreen(
     viewModel: WhiteboardViewModel = hiltViewModel()
@@ -38,10 +47,11 @@ fun WhiteboardScreen(
             onZoom = viewModel::onZoom,
             onPan = viewModel::onPan,
             onTap = { offset ->
+                // রিফ্লেকশনের জটিলতা এড়িয়ে টাইপ-সেফ চেকিং
                 when (uiState.toolSettings.tool) {
-                    DrawingTool.Text -> viewModel.addTextElement(offset)
-                    DrawingTool.StickyNote -> viewModel.addStickyNote(offset)
-                    else -> {}
+                    is DrawingTool.Text -> viewModel.addTextElement(offset)
+                    is DrawingTool.StickyNote -> viewModel.addStickyNote(offset)
+                    else -> { /* অন্যান্য ট্যাপ অ্যাকশন */ }
                 }
             }
         )
@@ -55,7 +65,7 @@ fun WhiteboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Page indicator
+            // রিফ্লেকশন ছাড়া সরাসরি কারেন্ট পেজের নাম রিড করা হচ্ছে
             Text(
                 text = uiState.currentPage?.name ?: "Whiteboard",
                 style = MaterialTheme.typography.titleMedium,
@@ -63,12 +73,12 @@ fun WhiteboardScreen(
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Reset view button
+                // Reset view button - Unresolved reference ফিক্স করতে Icons.Outlined.FilterCenterFocus ব্যবহার করা হয়েছে
                 SmallFloatingActionButton(
                     onClick = viewModel::resetView,
                     containerColor = MaterialTheme.colorScheme.surface
                 ) {
-                    Icon(Icons.Outlined.CenterFocusStrong, "Reset view")
+                    Icon(Icons.Outlined.FilterCenterFocus, "Reset view")
                 }
 
                 // Export button
@@ -81,26 +91,22 @@ fun WhiteboardScreen(
             }
         }
 
-        // ── Main Toolbar (bottom center) ───────────────────────────────
-        WhiteboardToolbar(
-            toolSettings = uiState.toolSettings,
-            canUndo = uiState.canUndo,
-            canRedo = uiState.canRedo,
-            onToolSelect = viewModel::selectTool,
-            onUndo = viewModel::undo,
-            onRedo = viewModel::redo,
-            onClear = viewModel::clearCanvas,
-            onColorClick = { showColorPicker = true },
-            onStrokeClick = { showStrokePicker = true },
+        // ── Zoom indicator (top right) ─────────────────────────────────
+        // রিফ্লেকশন ছাড়া সরাসরি স্টেট থেকে স্কেল ডেটা রিড করা হচ্ছে
+        val currentScale = uiState.canvasState.transform.scale
+
+        Text(
+            text = "${(currentScale * 100).toInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp)
+                .align(Alignment.TopEnd)
+                .padding(top = 80.dp, end = 16.dp)
         )
 
         // ── Page Panel (right side) ────────────────────────────────────
         PagePanel(
-            pages = uiState.pages,
-            currentPageId = uiState.currentPageId,
+            uiState = uiState,
             onAddPage = viewModel::addPage,
             onSwitchPage = viewModel::switchPage,
             onDeletePage = viewModel::deletePage,
@@ -109,15 +115,47 @@ fun WhiteboardScreen(
                 .padding(end = 16.dp)
         )
 
-        // ── Zoom indicator (top right) ─────────────────────────────────
-        Text(
-            text = "${(uiState.canvasState.transform.scale * 100).toInt()}%",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+        // ── Bottom Controls (Toolbar + Stroke Picker) ──────────────────
+        Column(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 80.dp, end = 16.dp)
-        )
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // অ্যানিমেটেড স্ট্রোক সাইজ পিকার প্যানেল (টুলবারের ঠিক উপরে ভাসমান থাকবে)
+            AnimatedVisibility(
+                visible = showStrokePicker,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                StrokeSizePicker(
+                    toolSettings = uiState.toolSettings,
+                    onStrokeWidthChange = viewModel::updateStrokeWidth
+                )
+            }
+
+            // মেইন কাস্টম টুলবার
+            WhiteboardToolbar(
+                toolSettings = uiState.toolSettings,
+                canUndo = uiState.canUndo,
+                canRedo = uiState.canRedo,
+                onToolSelect = { tool ->
+                    viewModel.selectTool(tool)
+                    showStrokePicker = false //ツール চেঞ্জ করলে স্লাইডার প্যানেল অটো অফ হবে
+                },
+                onUndo = viewModel::undo,
+                onRedo = viewModel::redo,
+                onClear = viewModel::clearCanvas,
+                onColorClick = {
+                    showColorPicker = true
+                    showStrokePicker = false
+                },
+                onStrokeClick = {
+                    showStrokePicker = !showStrokePicker // টগল লজিক
+                }
+            )
+        }
     }
 
     // ── Color Picker Dialog ──────────────────────────────────────────────
@@ -131,22 +169,11 @@ fun WhiteboardScreen(
             onDismiss = { showColorPicker = false }
         )
     }
-
-    // ── Stroke Size Picker ───────────────────────────────────────────────
-    if (showStrokePicker) {
-        StrokeSizeDialog(
-            currentSize = uiState.toolSettings.strokeWidth,
-            onSizeSelected = { size ->
-                viewModel.updateStrokeWidth(size)
-                showStrokePicker = false
-            },
-            onDismiss = { showStrokePicker = false }
-        )
-    }
 }
 
 // ── Color Picker Dialog ──────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ColorPickerDialog(
     currentColor: androidx.compose.ui.graphics.Color,
@@ -165,7 +192,7 @@ fun ColorPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Pick Color") },
         text = {
-            androidx.compose.foundation.layout.FlowRow(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

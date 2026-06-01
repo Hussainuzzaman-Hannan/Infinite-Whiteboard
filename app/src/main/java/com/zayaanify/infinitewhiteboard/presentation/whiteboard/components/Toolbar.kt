@@ -1,6 +1,6 @@
 // presentation/whiteboard/components/Toolbar.kt
 
-package com.zayaanify.whiteboard.presentation.whiteboard.components
+package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -21,8 +21,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.yourname.whiteboard.domain.model.DrawingTool
-import com.yourname.whiteboard.domain.model.ToolSettings
+import com.zayaanify.infinitewhiteboard.domain.model.DrawingTool
+import com.zayaanify.infinitewhiteboard.domain.model.ToolSettings
 
 @Composable
 fun WhiteboardToolbar(
@@ -72,13 +72,13 @@ fun WhiteboardToolbar(
 
         // Shape tools
         ToolButton(
-            icon = Icons.Outlined.RectangleOutlined,
+            icon = Icons.Outlined.Square,
             label = "Rectangle",
             isSelected = toolSettings.tool == DrawingTool.Shape.Rectangle,
             onClick = { onToolSelect(DrawingTool.Shape.Rectangle) }
         )
         ToolButton(
-            icon = Icons.Outlined.CircleOutlined,
+            icon = Icons.Outlined.Circle,
             label = "Circle",
             isSelected = toolSettings.tool == DrawingTool.Shape.Circle,
             onClick = { onToolSelect(DrawingTool.Shape.Circle) }

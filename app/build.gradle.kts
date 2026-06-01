@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.yourname.whiteboard"
+    namespace = "com.zayaanify.infinitewhiteboard"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.yourname.whiteboard"
+        applicationId = "com.zayaanify.infinitewhiteboard"
         minSdk = 26          // Android 8.0+ (PDF rendering support)
         targetSdk = 35
         versionCode = 1
@@ -88,6 +88,10 @@ dependencies {
 
     // ── Splash Screen ─────────────────────────────────────────────────────
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // ── Test (এখানে JUnit লাইব্রেরি দুটি যুক্ত করা হয়েছে) ────────────────────
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 
     // ── Debug ─────────────────────────────────────────────────────────────
     debugImplementation("androidx.compose.ui:ui-tooling")
