@@ -55,7 +55,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.ui:ui-text")  // গুরুত্বপূর্ণ: KeyboardOptions এর জন্য
+    implementation("androidx.compose.ui:ui-text")  // BOM থেকে আসবে, আলাদা version দরকার নেই
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
@@ -89,6 +89,9 @@ dependencies {
 
     // Splash Screen
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.ui:ui-tooling")
 
     // Test
     testImplementation("junit:junit:4.13.2")

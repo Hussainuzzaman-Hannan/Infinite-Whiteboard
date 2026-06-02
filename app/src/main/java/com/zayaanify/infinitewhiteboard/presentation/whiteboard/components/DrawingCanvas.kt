@@ -2,6 +2,10 @@ package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,22 +17,27 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zayaanify.infinitewhiteboard.domain.model.*
-
-// এরপর আপনার বাকি কম্পোজেবল কোডগুলো থাকবে...
 
 @Composable
 fun DrawingCanvas(
     canvasState: CanvasState,
     currentPageId: String,
+    onDrawStart: (Offset) -> Unit,
+    onDrawMove: (Offset) -> Unit,
+    onDrawEnd: () -> Unit,
+    onZoom: (Offset, Float) -> Unit,
+    onPan: (Offset) -> Unit,
     onTextUpdate: (String, String) -> Unit = { _, _ -> },
     onStickyNoteUpdate: (String, String) -> Unit = { _, _ -> },
+    onCanvasTap: (Offset) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var editingTextId by remember { mutableStateOf<String?>(null) }
@@ -38,9 +47,72 @@ fun DrawingCanvas(
 
     val density = LocalDensity.current
 
+    // আমরা toolSettings প্যারামিটার হিসেবে নেব না - এটি WhiteboardScreen থেকে আসবে
+    // বর্তমানে আমরা শুধু ড্রইং টুলের জন্য currentTool জানার প্রয়োজন নেই
+    // কারণ ড্রইং জেসচার WhiteboardScreen থেকে আসে
+
     Box(modifier = modifier.fillMaxSize()) {
-        // Canvas for drawing
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        // Canvas for drawing with full gesture handling
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                        var isDrawing = false
+                        var isPanning = false
+                        var zooming = false
+                        var initialZoom = 1f
+                        var initialPan = Offset.Zero
+                        var pointerId = down.id
+                        var currentPosition = down.position
+
+                        // আমরা এখানে টুল চেক করব না - ড্রইং সবসময় সক্রিয় থাকবে
+                        // টেক্সট এবং স্টিকি নোটের জন্য ট্যাপ হ্যান্ডলিং আলাদাভাবে করা হবে
+                        isDrawing = true
+                        onDrawStart(currentPosition)
+
+                        while (true) {
+                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+
+                            if (zoom != 1f && event.changes.size >= 2) {
+                                zooming = true
+                                val centroid = event.changes
+                                    .map { it.position }
+                                    .reduce { acc, pos ->
+                                        Offset(acc.x + pos.x, acc.y + pos.y)
+                                    }
+                                    .let { Offset(it.x / event.changes.size, it.y / event.changes.size) }
+                                onZoom(centroid, zoom / initialZoom)
+                                initialZoom = zoom
+                            }
+
+                            if (pan != Offset.Zero && event.changes.size >= 2) {
+                                isPanning = true
+                                onPan(pan - initialPan)
+                                initialPan = pan
+                            }
+
+                            val currentEventPosition = event.changes.find { it.id == pointerId }?.position
+                            if (!zooming && !isPanning && currentEventPosition != null && isDrawing) {
+                                currentPosition = currentEventPosition
+                                onDrawMove(currentPosition)
+                            }
+
+                            if (event.changes.all { !it.pressed }) {
+                                if (isDrawing) {
+                                    onDrawEnd()
+                                }
+                                // ট্যাপ ইভেন্ট সবসময় পাঠানো হবে
+                                onCanvasTap(currentPosition)
+                                break
+                            }
+                        }
+                    }
+                }
+        ) {
             withTransform({
                 translate(left = canvasState.transform.offset.x, top = canvasState.transform.offset.y)
                 scale(scaleX = canvasState.transform.scale, scaleY = canvasState.transform.scale, pivot = Offset.Zero)
@@ -52,18 +124,16 @@ fun DrawingCanvas(
                         is PathElement -> drawPathElement(element)
                         is ShapeElement -> drawShapeElement(element)
                         is TextElement -> {
-                            // Draw text element (only if not editing)
                             if (editingTextId != element.id) {
                                 drawTextElement(element)
                             }
                         }
                         is StickyNoteElement -> {
-                            // Draw sticky note (only if not editing)
                             if (editingStickyNoteId != element.id) {
                                 drawStickyNoteElement(element)
                             }
                         }
-                        else -> { /* Other elements */ }
+                        else -> {}
                     }
                 }
 
@@ -193,11 +263,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawShapeElement(sh
                 cap = StrokeCap.Round
             )
         }
-        else -> { /* Arrow or other shapes */ }
+        else -> {}
     }
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTextElement(textElement: TextElement) {
+    if (textElement.text.isEmpty()) return
+
     drawContext.canvas.nativeCanvas.apply {
         val paint = android.graphics.Paint().apply {
             color = textElement.color.toArgb()
@@ -255,24 +327,26 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteEleme
     )
 
     // Draw text
-    drawContext.canvas.nativeCanvas.apply {
-        val paint = android.graphics.Paint().apply {
-            color = android.graphics.Color.BLACK
-            textSize = 14f
-            isAntiAlias = true
-        }
+    if (stickyNote.text.isNotEmpty()) {
+        drawContext.canvas.nativeCanvas.apply {
+            val paint = android.graphics.Paint().apply {
+                color = android.graphics.Color.BLACK
+                textSize = 14f
+                isAntiAlias = true
+            }
 
-        val lines = stickyNote.text.split("\n")
-        var yOffset = stickyNote.position.y + 20f
-        lines.forEach { line ->
-            if (yOffset < stickyNote.position.y + stickyNote.height - 20f) {
-                drawText(
-                    line,
-                    stickyNote.position.x + 10f,
-                    yOffset,
-                    paint
-                )
-                yOffset += 20f
+            val lines = stickyNote.text.split("\n")
+            var yOffset = stickyNote.position.y + 20f
+            lines.forEach { line ->
+                if (yOffset < stickyNote.position.y + stickyNote.height - 20f) {
+                    drawText(
+                        line,
+                        stickyNote.position.x + 10f,
+                        yOffset,
+                        paint
+                    )
+                    yOffset += 20f
+                }
             }
         }
     }

@@ -328,16 +328,38 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    fun onCanvasTap(position: Offset) {
+        val state = _uiState.value
+        android.util.Log.d("WhiteboardViewModel", "onCanvasTap called at: $position")
+        android.util.Log.d("WhiteboardViewModel", "Current tool: ${state.toolSettings.selectedTool}")
+
+        when (state.toolSettings.selectedTool) {
+            is DrawingTool.Text -> {
+                android.util.Log.d("WhiteboardViewModel", "Adding text element")
+                addTextElement(position)
+            }
+            is DrawingTool.StickyNote -> {
+                android.util.Log.d("WhiteboardViewModel", "Adding sticky note")
+                addStickyNote(position)
+            }
+            else -> {
+                android.util.Log.d("WhiteboardViewModel", "Tool is not Text or StickyNote")
+            }
+        }
+    }
+
     fun addStickyNote(position: Offset) {
         val state = _uiState.value
         val canvasPosition = state.canvasState.transform.screenToCanvas(position)
         val currentZIndex = state.canvasState.elements.size
 
+        android.util.Log.d("WhiteboardViewModel", "addStickyNote - position: $canvasPosition")
+
         val note = StickyNoteElement(
             pageId = state.currentPageId,
             zIndex = currentZIndex,
             position = canvasPosition,
-            text = "New Note"
+            text = "New Note"  // ডিফল্ট টেক্সট দিন
         )
         saveToUndoStack()
         _uiState.update { s ->
@@ -347,6 +369,7 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
                 )
             )
         }
+        android.util.Log.d("WhiteboardViewModel", "Sticky note added, total elements: ${_uiState.value.canvasState.elements.size}")
     }
 
     fun addTextElement(position: Offset) {
@@ -354,11 +377,13 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         val canvasPosition = state.canvasState.transform.screenToCanvas(position)
         val currentZIndex = state.canvasState.elements.size
 
+        android.util.Log.d("WhiteboardViewModel", "Adding text at: $canvasPosition")
+
         val text = TextElement(
             pageId = state.currentPageId,
             zIndex = currentZIndex,
             position = canvasPosition,
-            text = "",
+            text = "",  // খালি রাখুন
             color = state.toolSettings.textColor,
             textSize = state.toolSettings.textSize,
             isBold = false,
@@ -369,8 +394,7 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         _uiState.update { s ->
             s.copy(
                 canvasState = s.canvasState.copy(
-                    elements = s.canvasState.elements + text,
-                    selectedElementId = text.id
+                    elements = s.canvasState.elements + text
                 )
             )
         }
@@ -392,7 +416,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // নতুন ফাংশন - স্টিকি নোট আপডেটের জন্য
     fun updateStickyNote(elementId: String, newText: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -404,6 +427,11 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
                 canvasState = state.canvasState.copy(elements = updatedElements)
             )
         }
+    }
+
+    fun shareCanvas() {
+        _uiState.update { it.copy(exportSuccess = true) }
+        // TODO: Phase 5 - Implement actual share functionality
     }
 
     private var autoSaveJob: kotlinx.coroutines.Job? = null

@@ -5,10 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -24,8 +20,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zayaanify.infinitewhiteboard.domain.model.*
@@ -42,87 +36,59 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
         DrawingCanvas(
             canvasState = uiState.canvasState,
             currentPageId = uiState.currentPageId,
-            onTextUpdate = { id, newText ->
-                viewModel.updateTextElement(id, newText)
-            },
-            onStickyNoteUpdate = { id, newText ->
-                viewModel.updateStickyNote(id, newText)
-            },
-            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                    var isDrawing = false
-                    var isPanning = false
-                    var zooming = false
-                    var initialZoom = 1f
-                    var initialPan = Offset.Zero
-                    var pointerId = down.id
-                    var currentPosition = down.position
-
-                    when (val tool = uiState.toolSettings.selectedTool) {
-                        is DrawingTool.Pen, is DrawingTool.Highlighter, is DrawingTool.Eraser -> {
-                            isDrawing = true
-                            viewModel.onDrawStart(currentPosition)
-                        }
-                        is DrawingTool.Shape -> {
-                            isDrawing = true
-                            viewModel.onDrawStart(currentPosition)
-                        }
-                        is DrawingTool.Text -> {
-                            // Text tool tap handled by canvas
-                        }
-                        is DrawingTool.StickyNote -> {
-                            // Sticky note tap handled by canvas
-                        }
-                        else -> {}
-                    }
-
-                    while (true) {
-                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                        val zoom = event.calculateZoom()
-                        val pan = event.calculatePan()
-
-                        if (zoom != 1f && event.changes.size >= 2) {
-                            zooming = true
-                            val centroid = event.changes.map { it.position }.reduce { acc, pos ->
-                                Offset(acc.x + pos.x, acc.y + pos.y)
-                            }.let { Offset(it.x / event.changes.size, it.y / event.changes.size) }
-                            viewModel.onZoom(centroid, zoom / initialZoom)
-                            initialZoom = zoom
-                        }
-
-                        if (pan != Offset.Zero && event.changes.size >= 2) {
-                            isPanning = true
-                            viewModel.onPan(pan - initialPan)
-                            initialPan = pan
-                        }
-
-                        val currentEventPosition = event.changes.find { it.id == pointerId }?.position
-                        if (!zooming && !isPanning && currentEventPosition != null && isDrawing) {
-                            currentPosition = currentEventPosition
-                            viewModel.onDrawMove(currentPosition)
-                        }
-
-                        if (event.changes.all { !it.pressed }) {
-                            if (isDrawing) viewModel.onDrawEnd()
-                            break
-                        }
-                    }
-                }
-            }
+            onDrawStart = { offset -> viewModel.onDrawStart(offset) },
+            onDrawMove = { offset -> viewModel.onDrawMove(offset) },
+            onDrawEnd = { viewModel.onDrawEnd() },
+            onZoom = { centroid, zoom -> viewModel.onZoom(centroid, zoom) },
+            onPan = { delta -> viewModel.onPan(delta) },
+            onTextUpdate = { id, newText -> viewModel.updateTextElement(id, newText) },
+            onStickyNoteUpdate = { id, newText -> viewModel.updateStickyNote(id, newText) },
+            onCanvasTap = { offset -> viewModel.onCanvasTap(offset) },
+            modifier = Modifier.fillMaxSize()
         )
 
         TopAppBar(
             title = { Text(uiState.currentPage?.name ?: "Infinite Whiteboard") },
             actions = {
+                // Undo Button
+                IconButton(
+                    onClick = { viewModel.undo() },
+                    enabled = uiState.canUndo
+                ) {
+                    Icon(
+                        Icons.Default.Undo,
+                        contentDescription = "Undo",
+                        tint = if (uiState.canUndo) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+
+                // Redo Button
+                IconButton(
+                    onClick = { viewModel.redo() },
+                    enabled = uiState.canRedo
+                ) {
+                    Icon(
+                        Icons.Default.Redo,
+                        contentDescription = "Redo",
+                        tint = if (uiState.canRedo) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+
+                // Reset View Button
                 IconButton(onClick = { viewModel.resetView() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Reset")
                 }
+
+                // Add Page Button
                 IconButton(onClick = { viewModel.addPage() }) {
                     Icon(Icons.Default.Add, contentDescription = "Add Page")
                 }
-                IconButton(onClick = { }) {
-                    Icon(Icons.Default.Share, contentDescription = "Export")
+
+                // Share Button
+                IconButton(onClick = { viewModel.shareCanvas() }) {
+                    Icon(Icons.Default.Share, contentDescription = "Share")
                 }
             }
         )
@@ -387,7 +353,11 @@ fun ToolButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            tint = when {
+                !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                isSelected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurface
+            }
         )
     }
 }
