@@ -12,7 +12,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -212,7 +211,7 @@ fun DrawingCanvas(
             }
         }
 
-        // Draggable Text editing overlay
+        // Text editing overlay
         if (showTextEditor && editingTextId != null) {
             val textElement = canvasState.elements
                 .filterIsInstance<TextElement>()
@@ -252,7 +251,7 @@ fun DrawingCanvas(
                                 .background(Color.LightGray),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("⋮⋮ Drag to move ⋮⋮", fontSize = 12.sp, color = Color.Gray)
+                            Text("⋯", fontSize = 16.sp, color = Color.Gray)
                         }
 
                         BasicTextField(
@@ -275,26 +274,27 @@ fun DrawingCanvas(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(8.dp),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
                                 onClick = { cancelText() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.Gray,
+                                    containerColor = Color(0xFFEF5350),
                                     contentColor = Color.White
                                 ),
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("Cancel")
+                                Text("Cancel", fontSize = 12.sp)
                             }
                             Button(
                                 onClick = { saveText() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.Blue,
+                                    containerColor = Color(0xFF4CAF50),
                                     contentColor = Color.White
-                                )
+                                ),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("Save")
+                                Text("Save", fontSize = 12.sp)
                             }
                         }
                     }
@@ -302,7 +302,7 @@ fun DrawingCanvas(
             }
         }
 
-        // Draggable Sticky note editing overlay
+        // Sticky note editing overlay
         if (showStickyNoteEditor && editingStickyNoteId != null) {
             val stickyNote = canvasState.elements
                 .filterIsInstance<StickyNoteElement>()
@@ -317,7 +317,7 @@ fun DrawingCanvas(
                             x = with(density) { localOffset.x.toDp() },
                             y = with(density) { localOffset.y.toDp() }
                         )
-                        .width(with(density) { note.width.toDp() })
+                        .width(220.dp)
                         .shadow(4.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
@@ -334,15 +334,17 @@ fun DrawingCanvas(
                             )
                         }
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier.background(note.color)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(24.dp)
-                                .background(note.color.copy(alpha = 0.8f)),
+                                .height(20.dp)
+                                .background(note.color.copy(alpha = 0.9f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("⋮⋮ Drag to move ⋮⋮", fontSize = 12.sp, color = Color.Black.copy(alpha = 0.6f))
+                            Text("⋯", fontSize = 16.sp, color = Color.Black.copy(alpha = 0.4f))
                         }
 
                         BasicTextField(
@@ -350,14 +352,12 @@ fun DrawingCanvas(
                             onValueChange = { editingStickyNoteValue = it },
                             textStyle = TextStyle(
                                 color = Color.Black,
-                                fontSize = 14.sp,
-                                background = note.color
+                                fontSize = 14.sp
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(with(density) { note.height.toDp() - 60.dp })
-                                .padding(8.dp)
-                                .background(note.color),
+                                .height(100.dp)
+                                .padding(8.dp),
                             singleLine = false
                         )
 
@@ -365,26 +365,27 @@ fun DrawingCanvas(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(8.dp),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
                                 onClick = { cancelStickyNote() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.Gray,
+                                    containerColor = Color(0xFFEF5350),
                                     contentColor = Color.White
                                 ),
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("Cancel")
+                                Text("Cancel", fontSize = 12.sp)
                             }
                             Button(
                                 onClick = { saveStickyNote() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.Blue,
+                                    containerColor = Color(0xFF4CAF50),
                                     contentColor = Color.White
-                                )
+                                ),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("Save")
+                                Text("Save", fontSize = 12.sp)
                             }
                         }
                     }
@@ -394,7 +395,6 @@ fun DrawingCanvas(
     }
 }
 
-// Draw functions - সম্পূর্ণ অপরিবর্তিত
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPathElement(pathElement: PathElement) {
     if (pathElement.points.size < 2) return
 
