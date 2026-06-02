@@ -6,11 +6,18 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -20,11 +27,12 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zayaanify.infinitewhiteboard.domain.model.*
+import kotlinx.coroutines.delay
 
 @Composable
 fun DrawingCanvas(
@@ -37,6 +45,8 @@ fun DrawingCanvas(
     onPan: (Offset) -> Unit,
     onTextUpdate: (String, String) -> Unit = { _, _ -> },
     onStickyNoteUpdate: (String, String) -> Unit = { _, _ -> },
+    onTextPositionUpdate: (String, Offset) -> Unit = { _, _ -> },
+    onStickyNotePositionUpdate: (String, Offset) -> Unit = { _, _ -> },
     onCanvasTap: (Offset) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -44,15 +54,79 @@ fun DrawingCanvas(
     var editingTextValue by remember { mutableStateOf("") }
     var editingStickyNoteId by remember { mutableStateOf<String?>(null) }
     var editingStickyNoteValue by remember { mutableStateOf("") }
+    var showTextEditor by remember { mutableStateOf(false) }
+    var showStickyNoteEditor by remember { mutableStateOf(false) }
 
+    val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
 
-    // আমরা toolSettings প্যারামিটার হিসেবে নেব না - এটি WhiteboardScreen থেকে আসবে
-    // বর্তমানে আমরা শুধু ড্রইং টুলের জন্য currentTool জানার প্রয়োজন নেই
-    // কারণ ড্রইং জেসচার WhiteboardScreen থেকে আসে
+    fun saveText() {
+        editingTextId?.let { id ->
+            if (editingTextValue.isNotEmpty()) {
+                onTextUpdate(id, editingTextValue)
+            }
+        }
+        editingTextId = null
+        editingTextValue = ""
+        showTextEditor = false
+        keyboardController?.hide()
+    }
+
+    fun cancelText() {
+        editingTextId = null
+        editingTextValue = ""
+        showTextEditor = false
+        keyboardController?.hide()
+    }
+
+    fun saveStickyNote() {
+        editingStickyNoteId?.let { id ->
+            if (editingStickyNoteValue.isNotEmpty()) {
+                onStickyNoteUpdate(id, editingStickyNoteValue)
+            }
+        }
+        editingStickyNoteId = null
+        editingStickyNoteValue = ""
+        showStickyNoteEditor = false
+        keyboardController?.hide()
+    }
+
+    fun cancelStickyNote() {
+        editingStickyNoteId = null
+        editingStickyNoteValue = ""
+        showStickyNoteEditor = false
+        keyboardController?.hide()
+    }
+
+    LaunchedEffect(canvasState.elements) {
+        val newTextElement = canvasState.elements
+            .filterIsInstance<TextElement>()
+            .find { it.isEditing && editingTextId == null }
+
+        if (newTextElement != null) {
+            editingTextId = newTextElement.id
+            editingTextValue = newTextElement.text
+            showTextEditor = true
+            delay(100)
+            keyboardController?.show()
+        }
+    }
+
+    LaunchedEffect(canvasState.elements) {
+        val newStickyNote = canvasState.elements
+            .filterIsInstance<StickyNoteElement>()
+            .find { it.text == "New Note" && editingStickyNoteId == null }
+
+        if (newStickyNote != null) {
+            editingStickyNoteId = newStickyNote.id
+            editingStickyNoteValue = newStickyNote.text
+            showStickyNoteEditor = true
+            delay(100)
+            keyboardController?.show()
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Canvas for drawing with full gesture handling
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -67,8 +141,6 @@ fun DrawingCanvas(
                         var pointerId = down.id
                         var currentPosition = down.position
 
-                        // আমরা এখানে টুল চেক করব না - ড্রইং সবসময় সক্রিয় থাকবে
-                        // টেক্সট এবং স্টিকি নোটের জন্য ট্যাপ হ্যান্ডলিং আলাদাভাবে করা হবে
                         isDrawing = true
                         onDrawStart(currentPosition)
 
@@ -105,7 +177,6 @@ fun DrawingCanvas(
                                 if (isDrawing) {
                                     onDrawEnd()
                                 }
-                                // ট্যাপ ইভেন্ট সবসময় পাঠানো হবে
                                 onCanvasTap(currentPosition)
                                 break
                             }
@@ -118,7 +189,6 @@ fun DrawingCanvas(
                 scale(scaleX = canvasState.transform.scale, scaleY = canvasState.transform.scale, pivot = Offset.Zero)
             }) {
 
-                // Draw all existing elements for current page
                 canvasState.elements.filter { it.pageId == currentPageId }.forEach { element ->
                     when (element) {
                         is PathElement -> drawPathElement(element)
@@ -137,68 +207,194 @@ fun DrawingCanvas(
                     }
                 }
 
-                // Draw current path (being drawn)
                 canvasState.currentPath?.let { drawPathElement(it) }
-
-                // Draw current shape (being drawn)
                 canvasState.currentShape?.let { drawShapeElement(it) }
             }
         }
 
-        // Text editing overlay
-        editingTextId?.let { textId ->
+        // Draggable Text editing overlay
+        if (showTextEditor && editingTextId != null) {
             val textElement = canvasState.elements
                 .filterIsInstance<TextElement>()
-                .find { it.id == textId }
+                .find { it.id == editingTextId }
 
             textElement?.let { element ->
-                val screenPosition = canvasState.transform.canvasToScreen(element.position)
+                var localOffset by remember { mutableStateOf(element.position) }
 
-                BasicTextField(
-                    value = editingTextValue,
-                    onValueChange = { editingTextValue = it },
-                    textStyle = TextStyle(
-                        color = element.color,
-                        fontSize = element.textSize.sp,
-                        background = Color.White
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                Card(
                     modifier = Modifier
-                        .offset(x = with(density) { screenPosition.x.toDp() }, y = with(density) { screenPosition.y.toDp() })
-                        .width(200.dp)
-                        .background(Color.White)
-                )
+                        .offset(
+                            x = with(density) { localOffset.x.toDp() },
+                            y = with(density) { localOffset.y.toDp() }
+                        )
+                        .width(250.dp)
+                        .shadow(4.dp)
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    localOffset = Offset(
+                                        localOffset.x + dragAmount.x / density.density,
+                                        localOffset.y + dragAmount.y / density.density
+                                    )
+                                },
+                                onDragEnd = {
+                                    onTextPositionUpdate(element.id, localOffset)
+                                }
+                            )
+                        }
+                ) {
+                    Column(modifier = Modifier.background(Color.White)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp)
+                                .background(Color.LightGray),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⋮⋮ Drag to move ⋮⋮", fontSize = 12.sp, color = Color.Gray)
+                        }
+
+                        BasicTextField(
+                            value = editingTextValue,
+                            onValueChange = { editingTextValue = it },
+                            textStyle = TextStyle(
+                                color = element.color,
+                                fontSize = element.textSize.sp,
+                                background = Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .padding(8.dp)
+                                .background(Color.White),
+                            singleLine = false
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Button(
+                                onClick = { cancelText() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.Gray,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text("Cancel")
+                            }
+                            Button(
+                                onClick = { saveText() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.Blue,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("Save")
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Sticky note editing overlay
-        editingStickyNoteId?.let { noteId ->
+        // Draggable Sticky note editing overlay
+        if (showStickyNoteEditor && editingStickyNoteId != null) {
             val stickyNote = canvasState.elements
                 .filterIsInstance<StickyNoteElement>()
-                .find { it.id == noteId }
+                .find { it.id == editingStickyNoteId }
 
             stickyNote?.let { note ->
-                val screenPosition = canvasState.transform.canvasToScreen(note.position)
+                var localOffset by remember { mutableStateOf(note.position) }
 
-                BasicTextField(
-                    value = editingStickyNoteValue,
-                    onValueChange = { editingStickyNoteValue = it },
-                    textStyle = TextStyle(
-                        color = Color.Black,
-                        fontSize = 14.sp,
-                        background = note.color
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                Card(
                     modifier = Modifier
-                        .offset(x = with(density) { screenPosition.x.toDp() }, y = with(density) { screenPosition.y.toDp() })
+                        .offset(
+                            x = with(density) { localOffset.x.toDp() },
+                            y = with(density) { localOffset.y.toDp() }
+                        )
                         .width(with(density) { note.width.toDp() })
-                        .background(note.color)
-                )
+                        .shadow(4.dp)
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    localOffset = Offset(
+                                        localOffset.x + dragAmount.x / density.density,
+                                        localOffset.y + dragAmount.y / density.density
+                                    )
+                                },
+                                onDragEnd = {
+                                    onStickyNotePositionUpdate(note.id, localOffset)
+                                }
+                            )
+                        }
+                ) {
+                    Column {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp)
+                                .background(note.color.copy(alpha = 0.8f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⋮⋮ Drag to move ⋮⋮", fontSize = 12.sp, color = Color.Black.copy(alpha = 0.6f))
+                        }
+
+                        BasicTextField(
+                            value = editingStickyNoteValue,
+                            onValueChange = { editingStickyNoteValue = it },
+                            textStyle = TextStyle(
+                                color = Color.Black,
+                                fontSize = 14.sp,
+                                background = note.color
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(with(density) { note.height.toDp() - 60.dp })
+                                .padding(8.dp)
+                                .background(note.color),
+                            singleLine = false
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Button(
+                                onClick = { cancelStickyNote() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.Gray,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text("Cancel")
+                            }
+                            Button(
+                                onClick = { saveStickyNote() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.Blue,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("Save")
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+// Draw functions - সম্পূর্ণ অপরিবর্তিত
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPathElement(pathElement: PathElement) {
     if (pathElement.points.size < 2) return
 
@@ -296,7 +492,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTextElement(tex
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteElement(stickyNote: StickyNoteElement) {
-    // Draw sticky note background
     drawRect(
         color = stickyNote.color,
         topLeft = stickyNote.position,
@@ -304,7 +499,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteEleme
         style = Fill
     )
 
-    // Draw border
     drawRect(
         color = Color.Black.copy(alpha = 0.2f),
         topLeft = stickyNote.position,
@@ -312,7 +506,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteEleme
         style = Stroke(width = 1f)
     )
 
-    // Draw fold effect (top-right corner)
     val foldSize = 20f
     val foldPath = Path().apply {
         moveTo(stickyNote.position.x + stickyNote.width - foldSize, stickyNote.position.y)
@@ -326,7 +519,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteEleme
         style = Fill
     )
 
-    // Draw text
     if (stickyNote.text.isNotEmpty()) {
         drawContext.canvas.nativeCanvas.apply {
             val paint = android.graphics.Paint().apply {

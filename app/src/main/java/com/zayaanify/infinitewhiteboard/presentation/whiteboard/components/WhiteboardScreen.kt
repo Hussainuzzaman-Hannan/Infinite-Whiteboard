@@ -43,6 +43,8 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
             onPan = { delta -> viewModel.onPan(delta) },
             onTextUpdate = { id, newText -> viewModel.updateTextElement(id, newText) },
             onStickyNoteUpdate = { id, newText -> viewModel.updateStickyNote(id, newText) },
+            onTextPositionUpdate = { id, newPos -> viewModel.updateTextPosition(id, newPos) },
+            onStickyNotePositionUpdate = { id, newPos -> viewModel.updateStickyNotePosition(id, newPos) },
             onCanvasTap = { offset -> viewModel.onCanvasTap(offset) },
             modifier = Modifier.fillMaxSize()
         )
@@ -50,7 +52,6 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
         TopAppBar(
             title = { Text(uiState.currentPage?.name ?: "Infinite Whiteboard") },
             actions = {
-                // Undo Button
                 IconButton(
                     onClick = { viewModel.undo() },
                     enabled = uiState.canUndo
@@ -63,7 +64,6 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                     )
                 }
 
-                // Redo Button
                 IconButton(
                     onClick = { viewModel.redo() },
                     enabled = uiState.canRedo
@@ -76,17 +76,14 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                     )
                 }
 
-                // Reset View Button
                 IconButton(onClick = { viewModel.resetView() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Reset")
                 }
 
-                // Add Page Button
                 IconButton(onClick = { viewModel.addPage() }) {
                     Icon(Icons.Default.Add, contentDescription = "Add Page")
                 }
 
-                // Share Button
                 IconButton(onClick = { viewModel.shareCanvas() }) {
                     Icon(Icons.Default.Share, contentDescription = "Share")
                 }

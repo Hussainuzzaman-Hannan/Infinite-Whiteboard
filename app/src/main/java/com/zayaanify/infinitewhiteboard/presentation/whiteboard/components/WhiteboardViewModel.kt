@@ -330,21 +330,14 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
 
     fun onCanvasTap(position: Offset) {
         val state = _uiState.value
-        android.util.Log.d("WhiteboardViewModel", "onCanvasTap called at: $position")
-        android.util.Log.d("WhiteboardViewModel", "Current tool: ${state.toolSettings.selectedTool}")
-
         when (state.toolSettings.selectedTool) {
             is DrawingTool.Text -> {
-                android.util.Log.d("WhiteboardViewModel", "Adding text element")
                 addTextElement(position)
             }
             is DrawingTool.StickyNote -> {
-                android.util.Log.d("WhiteboardViewModel", "Adding sticky note")
                 addStickyNote(position)
             }
-            else -> {
-                android.util.Log.d("WhiteboardViewModel", "Tool is not Text or StickyNote")
-            }
+            else -> {}
         }
     }
 
@@ -353,13 +346,11 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         val canvasPosition = state.canvasState.transform.screenToCanvas(position)
         val currentZIndex = state.canvasState.elements.size
 
-        android.util.Log.d("WhiteboardViewModel", "addStickyNote - position: $canvasPosition")
-
         val note = StickyNoteElement(
             pageId = state.currentPageId,
             zIndex = currentZIndex,
             position = canvasPosition,
-            text = "New Note"  // ডিফল্ট টেক্সট দিন
+            text = "New Note"
         )
         saveToUndoStack()
         _uiState.update { s ->
@@ -369,7 +360,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
                 )
             )
         }
-        android.util.Log.d("WhiteboardViewModel", "Sticky note added, total elements: ${_uiState.value.canvasState.elements.size}")
     }
 
     fun addTextElement(position: Offset) {
@@ -377,13 +367,11 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         val canvasPosition = state.canvasState.transform.screenToCanvas(position)
         val currentZIndex = state.canvasState.elements.size
 
-        android.util.Log.d("WhiteboardViewModel", "Adding text at: $canvasPosition")
-
         val text = TextElement(
             pageId = state.currentPageId,
             zIndex = currentZIndex,
             position = canvasPosition,
-            text = "",  // খালি রাখুন
+            text = "",
             color = state.toolSettings.textColor,
             textSize = state.toolSettings.textSize,
             isBold = false,
@@ -429,9 +417,36 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    // নতুন ফাংশন - টেক্সট পজিশন আপডেট
+    fun updateTextPosition(elementId: String, newPosition: Offset) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.map { element ->
+                if (element is TextElement && element.id == elementId) {
+                    element.copy(position = newPosition)
+                } else element
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(elements = updatedElements)
+            )
+        }
+    }
+
+    // নতুন ফাংশন - স্টিকি নোট পজিশন আপডেট
+    fun updateStickyNotePosition(elementId: String, newPosition: Offset) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.map { element ->
+                if (element is StickyNoteElement && element.id == elementId) {
+                    element.copy(position = newPosition)
+                } else element
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(elements = updatedElements)
+            )
+        }
+    }
+
     fun shareCanvas() {
         _uiState.update { it.copy(exportSuccess = true) }
-        // TODO: Phase 5 - Implement actual share functionality
     }
 
     private var autoSaveJob: kotlinx.coroutines.Job? = null
@@ -440,7 +455,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         autoSaveJob?.cancel()
         autoSaveJob = viewModelScope.launch {
             kotlinx.coroutines.delay(2000)
-            // Phase 3: Room database save
         }
     }
 }
