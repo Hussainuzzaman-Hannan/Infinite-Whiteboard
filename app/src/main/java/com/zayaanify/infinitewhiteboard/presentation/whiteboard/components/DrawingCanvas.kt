@@ -1,48 +1,130 @@
 package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
-import com.zayaanify.infinitewhiteboard.domain.model.CanvasState
-import com.zayaanify.infinitewhiteboard.domain.model.DrawingTool
-import com.zayaanify.infinitewhiteboard.domain.model.PathElement
-import com.zayaanify.infinitewhiteboard.domain.model.ShapeElement
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.zayaanify.infinitewhiteboard.domain.model.*
+
+// এরপর আপনার বাকি কম্পোজেবল কোডগুলো থাকবে...
 
 @Composable
 fun DrawingCanvas(
     canvasState: CanvasState,
     currentPageId: String,
+    onTextUpdate: (String, String) -> Unit = { _, _ -> },
+    onStickyNoteUpdate: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier.fillMaxSize()) {
-        // ক্যানভাসের জুম (scale) এবং প্যান (offset) ম্যাট্রিক্স অ্যাপ্লাই করা হচ্ছে
-        withTransform({
-            translate(left = canvasState.transform.offset.x, top = canvasState.transform.offset.y)
-            scale(scaleX = canvasState.transform.scale, scaleY = canvasState.transform.scale, pivot = androidx.compose.ui.geometry.Offset.Zero)
-        }) {
+    var editingTextId by remember { mutableStateOf<String?>(null) }
+    var editingTextValue by remember { mutableStateOf("") }
+    var editingStickyNoteId by remember { mutableStateOf<String?>(null) }
+    var editingStickyNoteValue by remember { mutableStateOf("") }
 
-            // ১. ইতিমধ্যে সংরক্ষিত সব এলিমেন্ট ড্র করা (শুধুমাত্র কারেন্ট পেজের জন্য)
-            canvasState.elements.filter { it.pageId == currentPageId }.forEach { element ->
-                when (element) {
-                    is PathElement -> drawPathElement(element)
-                    is ShapeElement -> drawShapeElement(element)
-                    else -> { /* অন্যান্য উপাদান পরবর্তী ফেজে যুক্ত হবে */ }
+    val density = LocalDensity.current
+
+    Box(modifier = modifier.fillMaxSize()) {
+        // Canvas for drawing
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            withTransform({
+                translate(left = canvasState.transform.offset.x, top = canvasState.transform.offset.y)
+                scale(scaleX = canvasState.transform.scale, scaleY = canvasState.transform.scale, pivot = Offset.Zero)
+            }) {
+
+                // Draw all existing elements for current page
+                canvasState.elements.filter { it.pageId == currentPageId }.forEach { element ->
+                    when (element) {
+                        is PathElement -> drawPathElement(element)
+                        is ShapeElement -> drawShapeElement(element)
+                        is TextElement -> {
+                            // Draw text element (only if not editing)
+                            if (editingTextId != element.id) {
+                                drawTextElement(element)
+                            }
+                        }
+                        is StickyNoteElement -> {
+                            // Draw sticky note (only if not editing)
+                            if (editingStickyNoteId != element.id) {
+                                drawStickyNoteElement(element)
+                            }
+                        }
+                        else -> { /* Other elements */ }
+                    }
                 }
+
+                // Draw current path (being drawn)
+                canvasState.currentPath?.let { drawPathElement(it) }
+
+                // Draw current shape (being drawn)
+                canvasState.currentShape?.let { drawShapeElement(it) }
             }
+        }
 
-            // ২. বর্তমানে ইউজার যে লাইনটি লাইভ আঁকছেন (Current Path)
-            canvasState.currentPath?.let { drawPathElement(it) }
+        // Text editing overlay
+        editingTextId?.let { textId ->
+            val textElement = canvasState.elements
+                .filterIsInstance<TextElement>()
+                .find { it.id == textId }
 
-            // ৩. বর্তমানে ইউজার যে শেপটি লাইভ আঁকছেন (Current Shape)
-            canvasState.currentShape?.let { drawShapeElement(it) }
+            textElement?.let { element ->
+                val screenPosition = canvasState.transform.canvasToScreen(element.position)
+
+                BasicTextField(
+                    value = editingTextValue,
+                    onValueChange = { editingTextValue = it },
+                    textStyle = TextStyle(
+                        color = element.color,
+                        fontSize = element.textSize.sp,
+                        background = Color.White
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier
+                        .offset(x = with(density) { screenPosition.x.toDp() }, y = with(density) { screenPosition.y.toDp() })
+                        .width(200.dp)
+                        .background(Color.White)
+                )
+            }
+        }
+
+        // Sticky note editing overlay
+        editingStickyNoteId?.let { noteId ->
+            val stickyNote = canvasState.elements
+                .filterIsInstance<StickyNoteElement>()
+                .find { it.id == noteId }
+
+            stickyNote?.let { note ->
+                val screenPosition = canvasState.transform.canvasToScreen(note.position)
+
+                BasicTextField(
+                    value = editingStickyNoteValue,
+                    onValueChange = { editingStickyNoteValue = it },
+                    textStyle = TextStyle(
+                        color = Color.Black,
+                        fontSize = 14.sp,
+                        background = note.color
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier
+                        .offset(x = with(density) { screenPosition.x.toDp() }, y = with(density) { screenPosition.y.toDp() })
+                        .width(with(density) { note.width.toDp() })
+                        .background(note.color)
+                )
+            }
         }
     }
 }
@@ -59,7 +141,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPathElement(pat
         }
     }
 
-    // হাইলাইটার বা ইরেজারের জন্য ব্লেন্ডিং মোড সেট করা
     val blendMode = if (pathElement.isEraser) BlendMode.Clear else BlendMode.SrcOver
 
     drawPath(
@@ -83,8 +164,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawShapeElement(sh
 
     if (width == 0f && height == 0f) return
 
-    val size = androidx.compose.ui.geometry.Size(width, height)
-    val topLeft = androidx.compose.ui.geometry.Offset(left, top)
+    val size = Size(width, height)
+    val topLeft = Offset(left, top)
 
     when (shapeElement.shapeType) {
         is DrawingTool.Shape.Rectangle -> {
@@ -112,6 +193,87 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawShapeElement(sh
                 cap = StrokeCap.Round
             )
         }
-        else -> { /* Arrow বা অন্যান্য শেপ ফিউচারে হ্যান্ডেল হবে */ }
+        else -> { /* Arrow or other shapes */ }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTextElement(textElement: TextElement) {
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = textElement.color.toArgb()
+            textSize = textElement.textSize
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.LEFT
+            if (textElement.isBold) {
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            }
+        }
+
+        val lines = textElement.text.split("\n")
+        var yOffset = textElement.position.y + textElement.textSize
+        lines.forEach { line ->
+            drawText(
+                line,
+                textElement.position.x,
+                yOffset,
+                paint
+            )
+            yOffset += textElement.textSize + 4
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteElement(stickyNote: StickyNoteElement) {
+    // Draw sticky note background
+    drawRect(
+        color = stickyNote.color,
+        topLeft = stickyNote.position,
+        size = Size(stickyNote.width, stickyNote.height),
+        style = Fill
+    )
+
+    // Draw border
+    drawRect(
+        color = Color.Black.copy(alpha = 0.2f),
+        topLeft = stickyNote.position,
+        size = Size(stickyNote.width, stickyNote.height),
+        style = Stroke(width = 1f)
+    )
+
+    // Draw fold effect (top-right corner)
+    val foldSize = 20f
+    val foldPath = Path().apply {
+        moveTo(stickyNote.position.x + stickyNote.width - foldSize, stickyNote.position.y)
+        lineTo(stickyNote.position.x + stickyNote.width, stickyNote.position.y)
+        lineTo(stickyNote.position.x + stickyNote.width, stickyNote.position.y + foldSize)
+        close()
+    }
+    drawPath(
+        path = foldPath,
+        color = Color.Black.copy(alpha = 0.1f),
+        style = Fill
+    )
+
+    // Draw text
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 14f
+            isAntiAlias = true
+        }
+
+        val lines = stickyNote.text.split("\n")
+        var yOffset = stickyNote.position.y + 20f
+        lines.forEach { line ->
+            if (yOffset < stickyNote.position.y + stickyNote.height - 20f) {
+                drawText(
+                    line,
+                    stickyNote.position.x + 10f,
+                    yOffset,
+                    paint
+                )
+                yOffset += 20f
+            }
+        }
     }
 }

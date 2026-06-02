@@ -1,7 +1,3 @@
-// presentation/whiteboard/WhiteboardViewModel.kt
-// কেন: UI এর সব logic এখানে থাকবে। Screen এ শুধু UI code।
-// StateFlow use করি কারণ Compose collect করে automatically re-compose করে।
-
 package com.zayaanify.infinitewhiteboard.presentation.whiteboard
 
 import androidx.compose.ui.geometry.Offset
@@ -14,14 +10,13 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// ViewModel এর সব UI state এক data class এ
 data class WhiteboardUiState(
-    val pages: List<BoardPage> = emptyList(), // আইডি কনফ্লিক্ট এড়াতে ডিফল্ট লিস্ট খালি রাখা হলো
+    val pages: List<BoardPage> = emptyList(),
     val currentPageId: String = "",
     val canvasState: CanvasState = CanvasState(),
     val toolSettings: ToolSettings = ToolSettings(),
-    val undoStack: List<List<DrawingElement>> = emptyList(),
-    val redoStack: List<List<DrawingElement>> = emptyList(),
+    val undoStack: List<List<CanvasElement>> = emptyList(),
+    val redoStack: List<List<CanvasElement>> = emptyList(),
     val isToolbarExpanded: Boolean = true,
     val isLoading: Boolean = false,
     val exportSuccess: Boolean = false
@@ -32,20 +27,17 @@ data class WhiteboardUiState(
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
 
-    val currentElements: List<DrawingElement>
+    val currentElements: List<CanvasElement>
         get() = canvasState.elements.filter { it.pageId == currentPageId }
 }
 
 @HiltViewModel
-class WhiteboardViewModel @Inject constructor(
-    // Future: inject use cases here
-) : ViewModel() {
+class WhiteboardViewModel @Inject constructor() : ViewModel() {
 
     private val _uiState = MutableStateFlow(WhiteboardUiState())
     val uiState: StateFlow<WhiteboardUiState> = _uiState.asStateFlow()
 
     init {
-        // রানটাইমে একটি ফিক্সড প্রথম পেজ জেনারেট করে স্টেট আপডেট করা হচ্ছে
         val defaultPage = BoardPage(name = "Page 1", order = 0)
         _uiState.update { state ->
             state.copy(
@@ -55,12 +47,10 @@ class WhiteboardViewModel @Inject constructor(
         }
     }
 
-    // ─── Tool Selection ────────────────────────────────────────────────
-
     fun selectTool(tool: DrawingTool) {
         _uiState.update { state ->
             state.copy(
-                toolSettings = state.toolSettings.copy(tool = tool)
+                toolSettings = state.toolSettings.copy(selectedTool = tool)
             )
         }
     }
@@ -68,7 +58,10 @@ class WhiteboardViewModel @Inject constructor(
     fun updateColor(color: Color) {
         _uiState.update { state ->
             state.copy(
-                toolSettings = state.toolSettings.copy(strokeColor = color)
+                toolSettings = state.toolSettings.copy(
+                    strokeColor = color,
+                    textColor = color
+                )
             )
         }
     }
@@ -81,23 +74,36 @@ class WhiteboardViewModel @Inject constructor(
         }
     }
 
-    // ─── Drawing ───────────────────────────────────────────────────────
-
     fun onDrawStart(offset: Offset) {
         val state = _uiState.value
         val canvasOffset = state.canvasState.transform.screenToCanvas(offset)
-        val tool = state.toolSettings.tool
+        val tool = state.toolSettings.selectedTool
 
         when (tool) {
-            is DrawingTool.Pen, DrawingTool.Highlighter -> {
+            is DrawingTool.Pen -> {
                 val newPath = PathElement(
                     pageId = state.currentPageId,
-                    zIndex = state.currentElements.size,
                     points = listOf(canvasOffset),
                     color = state.toolSettings.strokeColor,
                     strokeWidth = state.toolSettings.strokeWidth,
-                    opacity = if (tool == DrawingTool.Highlighter) 0.4f else 1f,
-                    tool = tool
+                    opacity = 1f,
+                    isEraser = false
+                )
+                _uiState.update { it.copy(
+                    canvasState = it.canvasState.copy(
+                        isDrawing = true,
+                        currentPath = newPath
+                    )
+                )}
+            }
+            is DrawingTool.Highlighter -> {
+                val newPath = PathElement(
+                    pageId = state.currentPageId,
+                    points = listOf(canvasOffset),
+                    color = state.toolSettings.strokeColor,
+                    strokeWidth = state.toolSettings.strokeWidth,
+                    opacity = 0.4f,
+                    isEraser = false
                 )
                 _uiState.update { it.copy(
                     canvasState = it.canvasState.copy(
@@ -109,10 +115,10 @@ class WhiteboardViewModel @Inject constructor(
             is DrawingTool.Eraser -> {
                 val eraserPath = PathElement(
                     pageId = state.currentPageId,
-                    zIndex = state.currentElements.size,
                     points = listOf(canvasOffset),
                     color = Color.White,
                     strokeWidth = state.toolSettings.strokeWidth * 3,
+                    opacity = 1f,
                     isEraser = true
                 )
                 _uiState.update { it.copy(
@@ -125,7 +131,6 @@ class WhiteboardViewModel @Inject constructor(
             is DrawingTool.Shape -> {
                 val newShape = ShapeElement(
                     pageId = state.currentPageId,
-                    zIndex = state.currentElements.size,
                     shapeType = tool,
                     startOffset = canvasOffset,
                     endOffset = canvasOffset,
@@ -167,7 +172,6 @@ class WhiteboardViewModel @Inject constructor(
         val state = _uiState.value
         if (!state.canvasState.isDrawing) return
 
-        // Undo stack এ current state save করো
         saveToUndoStack()
 
         val newElements = buildList {
@@ -187,19 +191,15 @@ class WhiteboardViewModel @Inject constructor(
             )
         }
 
-        // Auto-save (debounced — 2 sec পরে save হবে)
         scheduleAutoSave()
     }
-
-    // ─── Canvas Transform (Zoom & Pan) ─────────────────────────────────
 
     fun onZoom(centroid: Offset, zoom: Float) {
         _uiState.update { state ->
             val currentTransform = state.canvasState.transform
             val newScale = (currentTransform.scale * zoom)
-                .coerceIn(CanvasTransform.MIN_SCALE, CanvasTransform.MAX_SCALE)
+                .coerceIn(0.5f, 5f)
 
-            // Centroid point ঠিক রেখে zoom করো
             val newOffset = Offset(
                 x = centroid.x - (centroid.x - currentTransform.offset.x) * (newScale / currentTransform.scale),
                 y = centroid.y - (centroid.y - currentTransform.offset.y) * (newScale / currentTransform.scale)
@@ -233,21 +233,19 @@ class WhiteboardViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 canvasState = state.canvasState.copy(
-                    transform = CanvasTransform.INITIAL
+                    transform = Transform()
                 )
             )
         }
     }
 
-    // ─── Undo / Redo ───────────────────────────────────────────────────
-
     private fun saveToUndoStack() {
         _uiState.update { state ->
             val newUndoStack = (state.undoStack + listOf(state.canvasState.elements))
-                .takeLast(50) // Max 50 undo steps, memory efficient
+                .takeLast(50)
             state.copy(
                 undoStack = newUndoStack,
-                redoStack = emptyList() // Redo clear হয় নতুন action এ
+                redoStack = emptyList()
             )
         }
     }
@@ -291,8 +289,6 @@ class WhiteboardViewModel @Inject constructor(
         }
     }
 
-    // ─── Page Management ───────────────────────────────────────────────
-
     fun addPage() {
         val newPage = BoardPage(
             name = "Page ${_uiState.value.pages.size + 1}",
@@ -312,7 +308,7 @@ class WhiteboardViewModel @Inject constructor(
 
     fun deletePage(pageId: String) {
         val state = _uiState.value
-        if (state.pages.size <= 1) return // কমপক্ষে 1 page থাকতে হবে
+        if (state.pages.size <= 1) return
 
         val newPages = state.pages.filter { it.id != pageId }
         val newCurrentPageId = if (state.currentPageId == pageId) {
@@ -332,15 +328,16 @@ class WhiteboardViewModel @Inject constructor(
         }
     }
 
-    // ─── Sticky Notes ──────────────────────────────────────────────────
-
     fun addStickyNote(position: Offset) {
         val state = _uiState.value
         val canvasPosition = state.canvasState.transform.screenToCanvas(position)
+        val currentZIndex = state.canvasState.elements.size
+
         val note = StickyNoteElement(
             pageId = state.currentPageId,
-            zIndex = state.currentElements.size,
-            position = canvasPosition
+            zIndex = currentZIndex,
+            position = canvasPosition,
+            text = "New Note"
         )
         saveToUndoStack()
         _uiState.update { s ->
@@ -355,10 +352,17 @@ class WhiteboardViewModel @Inject constructor(
     fun addTextElement(position: Offset) {
         val state = _uiState.value
         val canvasPosition = state.canvasState.transform.screenToCanvas(position)
+        val currentZIndex = state.canvasState.elements.size
+
         val text = TextElement(
             pageId = state.currentPageId,
-            zIndex = state.currentElements.size,
+            zIndex = currentZIndex,
             position = canvasPosition,
+            text = "",
+            color = state.toolSettings.textColor,
+            textSize = state.toolSettings.textSize,
+            isBold = false,
+            isItalic = false,
             isEditing = true
         )
         saveToUndoStack()
@@ -372,15 +376,43 @@ class WhiteboardViewModel @Inject constructor(
         }
     }
 
-    // ─── Auto Save ─────────────────────────────────────────────────────
+    fun updateTextElement(elementId: String, newText: String) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.map { element ->
+                if (element is TextElement && element.id == elementId) {
+                    element.copy(text = newText, isEditing = false)
+                } else element
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(
+                    elements = updatedElements,
+                    selectedElementId = null
+                )
+            )
+        }
+    }
+
+    // নতুন ফাংশন - স্টিকি নোট আপডেটের জন্য
+    fun updateStickyNote(elementId: String, newText: String) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.map { element ->
+                if (element is StickyNoteElement && element.id == elementId) {
+                    element.copy(text = newText)
+                } else element
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(elements = updatedElements)
+            )
+        }
+    }
 
     private var autoSaveJob: kotlinx.coroutines.Job? = null
 
     private fun scheduleAutoSave() {
         autoSaveJob?.cancel()
         autoSaveJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(2000) // 2 second debounce
-            // TODO Phase 5: Room database save
+            kotlinx.coroutines.delay(2000)
+            // Phase 3: Room database save
         }
     }
 }

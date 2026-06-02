@@ -1,164 +1,180 @@
-// presentation/whiteboard/WhiteboardScreen.kt
-// কেন: সব components একত্রে এখানে compose হয়।
-
 package com.zayaanify.infinitewhiteboard.presentation.whiteboard
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.zayaanify.infinitewhiteboard.domain.model.DrawingTool
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.InfiniteCanvas
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.PagePanel
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.StrokeSizePicker
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.WhiteboardToolbar
+import com.zayaanify.infinitewhiteboard.domain.model.*
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.DrawingCanvas
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WhiteboardScreen(
-    viewModel: WhiteboardViewModel = hiltViewModel()
-) {
+fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showColorPicker by remember { mutableStateOf(false) }
     var showStrokePicker by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-
-        // ── Infinite Canvas (full screen) ──────────────────────────────
-        InfiniteCanvas(
+        DrawingCanvas(
             canvasState = uiState.canvasState,
-            toolSettings = uiState.toolSettings,
-            modifier = Modifier.fillMaxSize(),
-            onDrawStart = viewModel::onDrawStart,
-            onDrawMove = viewModel::onDrawMove,
-            onDrawEnd = viewModel::onDrawEnd,
-            onZoom = viewModel::onZoom,
-            onPan = viewModel::onPan,
-            onTap = { offset ->
-                // রিফ্লেকশনের জটিলতা এড়িয়ে টাইপ-সেফ চেকিং
-                when (uiState.toolSettings.tool) {
-                    is DrawingTool.Text -> viewModel.addTextElement(offset)
-                    is DrawingTool.StickyNote -> viewModel.addStickyNote(offset)
-                    else -> { /* অন্যান্য ট্যাপ অ্যাকশন */ }
+            currentPageId = uiState.currentPageId,
+            onTextUpdate = { id, newText ->
+                viewModel.updateTextElement(id, newText)
+            },
+            onStickyNoteUpdate = { id, newText ->
+                viewModel.updateStickyNote(id, newText)
+            },
+            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                    var isDrawing = false
+                    var isPanning = false
+                    var zooming = false
+                    var initialZoom = 1f
+                    var initialPan = Offset.Zero
+                    var pointerId = down.id
+                    var currentPosition = down.position
+
+                    when (val tool = uiState.toolSettings.selectedTool) {
+                        is DrawingTool.Pen, is DrawingTool.Highlighter, is DrawingTool.Eraser -> {
+                            isDrawing = true
+                            viewModel.onDrawStart(currentPosition)
+                        }
+                        is DrawingTool.Shape -> {
+                            isDrawing = true
+                            viewModel.onDrawStart(currentPosition)
+                        }
+                        is DrawingTool.Text -> {
+                            // Text tool tap handled by canvas
+                        }
+                        is DrawingTool.StickyNote -> {
+                            // Sticky note tap handled by canvas
+                        }
+                        else -> {}
+                    }
+
+                    while (true) {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        val zoom = event.calculateZoom()
+                        val pan = event.calculatePan()
+
+                        if (zoom != 1f && event.changes.size >= 2) {
+                            zooming = true
+                            val centroid = event.changes.map { it.position }.reduce { acc, pos ->
+                                Offset(acc.x + pos.x, acc.y + pos.y)
+                            }.let { Offset(it.x / event.changes.size, it.y / event.changes.size) }
+                            viewModel.onZoom(centroid, zoom / initialZoom)
+                            initialZoom = zoom
+                        }
+
+                        if (pan != Offset.Zero && event.changes.size >= 2) {
+                            isPanning = true
+                            viewModel.onPan(pan - initialPan)
+                            initialPan = pan
+                        }
+
+                        val currentEventPosition = event.changes.find { it.id == pointerId }?.position
+                        if (!zooming && !isPanning && currentEventPosition != null && isDrawing) {
+                            currentPosition = currentEventPosition
+                            viewModel.onDrawMove(currentPosition)
+                        }
+
+                        if (event.changes.all { !it.pressed }) {
+                            if (isDrawing) viewModel.onDrawEnd()
+                            break
+                        }
+                    }
                 }
             }
         )
 
-        // ── Top Bar ────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .align(Alignment.TopCenter),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // রিফ্লেকশন ছাড়া সরাসরি কারেন্ট পেজের নাম রিড করা হচ্ছে
-            Text(
-                text = uiState.currentPage?.name ?: "Whiteboard",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Reset view button - Unresolved reference ফিক্স করতে Icons.Outlined.FilterCenterFocus ব্যবহার করা হয়েছে
-                SmallFloatingActionButton(
-                    onClick = viewModel::resetView,
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    Icon(Icons.Outlined.FilterCenterFocus, "Reset view")
+        TopAppBar(
+            title = { Text(uiState.currentPage?.name ?: "Infinite Whiteboard") },
+            actions = {
+                IconButton(onClick = { viewModel.resetView() }) {
+                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Reset")
                 }
-
-                // Export button
-                SmallFloatingActionButton(
-                    onClick = { /* Phase 5 */ },
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    Icon(Icons.Outlined.FileDownload, "Export")
+                IconButton(onClick = { viewModel.addPage() }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Page")
+                }
+                IconButton(onClick = { }) {
+                    Icon(Icons.Default.Share, contentDescription = "Export")
                 }
             }
+        )
+
+        Card(modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp)) {
+            Text(
+                text = "${(uiState.canvasState.transform.scale * 100).toInt()}%",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
         }
 
-        // ── Zoom indicator (top right) ─────────────────────────────────
-        // রিফ্লেকশন ছাড়া সরাসরি স্টেট থেকে স্কেল ডেটা রিড করা হচ্ছে
-        val currentScale = uiState.canvasState.transform.scale
+        if (uiState.pages.size > 1) {
+            PagePanel(
+                pages = uiState.pages,
+                currentPageId = uiState.currentPageId,
+                onPageSelected = { viewModel.switchPage(it) },
+                onPageDeleted = { viewModel.deletePage(it) },
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)
+            )
+        }
 
-        Text(
-            text = "${(currentScale * 100).toInt()}%",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 80.dp, end = 16.dp)
-        )
-
-        // ── Page Panel (right side) ────────────────────────────────────
-        PagePanel(
-            uiState = uiState,
-            onAddPage = viewModel::addPage,
-            onSwitchPage = viewModel::switchPage,
-            onDeletePage = viewModel::deletePage,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp)
-        )
-
-        // ── Bottom Controls (Toolbar + Stroke Picker) ──────────────────
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // অ্যানিমেটেড স্ট্রোক সাইজ পিকার প্যানেল (টুলবারের ঠিক উপরে ভাসমান থাকবে)
             AnimatedVisibility(
                 visible = showStrokePicker,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
             ) {
                 StrokeSizePicker(
-                    toolSettings = uiState.toolSettings,
-                    onStrokeWidthChange = viewModel::updateStrokeWidth
+                    currentWidth = uiState.toolSettings.strokeWidth,
+                    onWidthChange = { viewModel.updateStrokeWidth(it) }
                 )
             }
 
-            // মেইন কাস্টম টুলবার
             WhiteboardToolbar(
-                toolSettings = uiState.toolSettings,
+                currentTool = uiState.toolSettings.selectedTool,
+                currentColor = uiState.toolSettings.strokeColor,
                 canUndo = uiState.canUndo,
                 canRedo = uiState.canRedo,
-                onToolSelect = { tool ->
-                    viewModel.selectTool(tool)
-                    showStrokePicker = false //ツール চেঞ্জ করলে স্লাইডার প্যানেল অটো অফ হবে
-                },
-                onUndo = viewModel::undo,
-                onRedo = viewModel::redo,
-                onClear = viewModel::clearCanvas,
-                onColorClick = {
-                    showColorPicker = true
-                    showStrokePicker = false
-                },
-                onStrokeClick = {
-                    showStrokePicker = !showStrokePicker // টগল লজিক
-                }
+                onToolSelected = { viewModel.selectTool(it) },
+                onColorClick = { showColorPicker = true },
+                onStrokeClick = { showStrokePicker = !showStrokePicker },
+                onUndo = { viewModel.undo() },
+                onRedo = { viewModel.redo() },
+                onClear = { viewModel.clearCanvas() }
             )
         }
     }
 
-    // ── Color Picker Dialog ──────────────────────────────────────────────
     if (showColorPicker) {
         ColorPickerDialog(
             currentColor = uiState.toolSettings.strokeColor,
@@ -171,42 +187,240 @@ fun WhiteboardScreen(
     }
 }
 
-// ── Color Picker Dialog ──────────────────────────────────────────────────────
+@Composable
+fun PagePanel(
+    pages: List<BoardPage>,
+    currentPageId: String,
+    onPageSelected: (String) -> Unit,
+    onPageDeleted: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier, shape = RoundedCornerShape(12.dp)) {
+        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            pages.forEach { page ->
+                PageThumbnail(
+                    page = page,
+                    isSelected = page.id == currentPageId,
+                    onClick = { onPageSelected(page.id) },
+                    onDelete = { onPageDeleted(page.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PageThumbnail(
+    page: BoardPage,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.size(60.dp, 80.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Box {
+            Text(
+                text = page.name,
+                modifier = Modifier.align(Alignment.Center),
+                style = MaterialTheme.typography.labelSmall
+            )
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Delete", modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun StrokeSizePicker(currentWidth: Float, onWidthChange: (Float) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), shape = RoundedCornerShape(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "Stroke Size: ${currentWidth.toInt()}px",
+                style = MaterialTheme.typography.labelMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(listOf(2f, 5f, 10f, 15f, 20f, 30f, 40f)) { size ->
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onWidthChange(size) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(size.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (currentWidth == size) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WhiteboardToolbar(
+    currentTool: DrawingTool,
+    currentColor: Color,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onToolSelected: (DrawingTool) -> Unit,
+    onColorClick: () -> Unit,
+    onStrokeClick: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onClear: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(8.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ToolButton(
+                icon = Icons.Default.Brush,
+                isSelected = currentTool is DrawingTool.Pen,
+                onClick = { onToolSelected(DrawingTool.Pen()) }
+            )
+
+            ToolButton(
+                icon = Icons.Default.Highlight,
+                isSelected = currentTool is DrawingTool.Highlighter,
+                onClick = { onToolSelected(DrawingTool.Highlighter()) }
+            )
+
+            ToolButton(
+                icon = Icons.Default.CropSquare,
+                isSelected = currentTool is DrawingTool.Shape.Rectangle,
+                onClick = { onToolSelected(DrawingTool.Shape.Rectangle()) }
+            )
+
+            ToolButton(
+                icon = Icons.Default.RadioButtonUnchecked,
+                isSelected = currentTool is DrawingTool.Shape.Circle,
+                onClick = { onToolSelected(DrawingTool.Shape.Circle()) }
+            )
+
+            ToolButton(
+                icon = Icons.Default.TextFields,
+                isSelected = currentTool is DrawingTool.Text,
+                onClick = { onToolSelected(DrawingTool.Text) }
+            )
+
+            ToolButton(
+                icon = Icons.Default.NoteAdd,
+                isSelected = currentTool is DrawingTool.StickyNote,
+                onClick = { onToolSelected(DrawingTool.StickyNote) }
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(currentColor)
+                    .clickable { onColorClick() }
+            )
+
+            ToolButton(
+                icon = Icons.Default.LineWeight,
+                isSelected = false,
+                onClick = onStrokeClick
+            )
+
+            ToolButton(
+                icon = Icons.Default.Undo,
+                isSelected = false,
+                onClick = onUndo,
+                enabled = canUndo
+            )
+
+            ToolButton(
+                icon = Icons.Default.Redo,
+                isSelected = false,
+                onClick = onRedo,
+                enabled = canRedo
+            )
+
+            ToolButton(
+                icon = Icons.Default.Delete,
+                isSelected = false,
+                onClick = onClear
+            )
+        }
+    }
+}
+
+@Composable
+fun ToolButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ColorPickerDialog(
-    currentColor: androidx.compose.ui.graphics.Color,
-    onColorSelected: (androidx.compose.ui.graphics.Color) -> Unit,
+    currentColor: Color,
+    onColorSelected: (Color) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val colors = remember {
-        listOf(
-            0xFF000000, 0xFFFFFFFF, 0xFFEF4444, 0xFFF97316,
-            0xFFEAB308, 0xFF22C55E, 0xFF3B82F6, 0xFF8B5CF6,
-            0xFFEC4899, 0xFF14B8A6, 0xFF6B7280, 0xFF92400E
-        ).map { androidx.compose.ui.graphics.Color(it.toLong()) }
-    }
+    val colors = listOf(
+        Color.Black, Color.White, Color.Red, Color(0xFFFF9800), Color.Yellow,
+        Color.Green, Color.Blue, Color(0xFF9C27B0), Color(0xFFE91E63), Color.Cyan, Color.Gray, Color(0xFF795548)
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pick Color") },
+        title = { Text(text = "Select Color") },
         text = {
-            FlowRow(
+            androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 colors.forEach { color ->
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(color)
                             .border(
                                 width = if (color == currentColor) 3.dp else 1.dp,
-                                color = if (color == currentColor)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outline,
+                                color = if (color == currentColor) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 shape = CircleShape
                             )
                             .clickable { onColorSelected(color) }
@@ -215,7 +429,9 @@ fun ColorPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) {
+                Text(text = "Close")
+            }
         }
     )
 }
