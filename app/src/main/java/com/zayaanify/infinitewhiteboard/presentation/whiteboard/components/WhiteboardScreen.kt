@@ -43,8 +43,9 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
             onZoom = { centroid, zoom -> viewModel.onZoom(centroid, zoom) },
             onPan = { delta -> viewModel.onPan(delta) },
             onTextUpdate = { id, newText -> viewModel.updateTextElement(id, newText) },
-            onCancelText = { id -> viewModel.cancelTextElement(id) },  // নতুন লাইন
+            onCancelText = { id -> viewModel.cancelTextElement(id) },
             onStickyNoteUpdate = { id, newText -> viewModel.updateStickyNote(id, newText) },
+            onCancelStickyNote = { id -> viewModel.cancelStickyNoteElement(id) },  // নতুন লাইন
             onTextPositionUpdate = { id, newPos -> viewModel.updateTextPosition(id, newPos) },
             onStickyNotePositionUpdate = { id, newPos -> viewModel.updateStickyNotePosition(id, newPos) },
             onCanvasTap = { offset -> viewModel.onCanvasTap(offset) },

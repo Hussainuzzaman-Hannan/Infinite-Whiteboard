@@ -43,8 +43,9 @@ fun DrawingCanvas(
     onZoom: (Offset, Float) -> Unit,
     onPan: (Offset) -> Unit,
     onTextUpdate: (String, String) -> Unit = { _, _ -> },
-    onCancelText: (String) -> Unit = {},  // নতুন প্যারামিটার - টেক্সট ক্যান্সেলের জন্য
+    onCancelText: (String) -> Unit = {},
     onStickyNoteUpdate: (String, String) -> Unit = { _, _ -> },
+    onCancelStickyNote: (String) -> Unit = {},  // নতুন প্যারামিটার - স্টিকি নোট ক্যান্সেলের জন্য
     onTextPositionUpdate: (String, Offset) -> Unit = { _, _ -> },
     onStickyNotePositionUpdate: (String, Offset) -> Unit = { _, _ -> },
     onCanvasTap: (Offset) -> Unit = {},
@@ -65,7 +66,6 @@ fun DrawingCanvas(
             if (editingTextValue.isNotEmpty()) {
                 onTextUpdate(id, editingTextValue)
             } else {
-                // খালি টেক্সট হলে এলিমেন্ট ডিলিট করুন
                 onCancelText(id)
             }
         }
@@ -89,6 +89,9 @@ fun DrawingCanvas(
         editingStickyNoteId?.let { id ->
             if (editingStickyNoteValue.isNotEmpty()) {
                 onStickyNoteUpdate(id, editingStickyNoteValue)
+            } else {
+                // খালি স্টিকি নোট হলে এলিমেন্ট ডিলিট করুন
+                onCancelStickyNote(id)
             }
         }
         editingStickyNoteId = null
@@ -98,6 +101,9 @@ fun DrawingCanvas(
     }
 
     fun cancelStickyNote() {
+        editingStickyNoteId?.let { id ->
+            onCancelStickyNote(id)
+        }
         editingStickyNoteId = null
         editingStickyNoteValue = ""
         showStickyNoteEditor = false

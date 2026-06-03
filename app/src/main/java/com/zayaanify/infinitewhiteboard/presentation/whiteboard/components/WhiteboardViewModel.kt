@@ -389,7 +389,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // আপডেটেড - টেক্সট সেভ করার পর পেন টুলে স্যুইচ
     fun updateTextElement(elementId: String, newText: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -407,7 +406,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // নতুন - টেক্সট ক্যান্সেল করার ফাংশন
     fun cancelTextElement(elementId: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.filter { element ->
@@ -423,6 +421,7 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    // আপডেটেড - স্টিকি নোট সেভ করার পর পেন টুলে স্যুইচ
     fun updateStickyNote(elementId: String, newText: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -431,7 +430,24 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
                 } else element
             }
             state.copy(
-                canvasState = state.canvasState.copy(elements = updatedElements)
+                canvasState = state.canvasState.copy(elements = updatedElements),
+                toolSettings = state.toolSettings.copy(selectedTool = DrawingTool.Pen())
+            )
+        }
+    }
+
+    // নতুন - স্টিকি নোট ক্যান্সেল করার ফাংশন
+    fun cancelStickyNoteElement(elementId: String) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.filter { element ->
+                element.id != elementId
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(
+                    elements = updatedElements,
+                    selectedElementId = null
+                ),
+                toolSettings = state.toolSettings.copy(selectedTool = DrawingTool.Pen())
             )
         }
     }
