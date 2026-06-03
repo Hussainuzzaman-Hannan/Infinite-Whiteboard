@@ -60,7 +60,8 @@ data class StickyNoteElement(
     val position: Offset,
     val color: Color = Color.Yellow,
     val width: Float = 200f,
-    val height: Float = 200f
+    val height: Float = 200f,
+    val fontSize: Float = 14f  // এই লাইনটি যোগ করুন
 ) : CanvasElement
 
 data class ImageElement(

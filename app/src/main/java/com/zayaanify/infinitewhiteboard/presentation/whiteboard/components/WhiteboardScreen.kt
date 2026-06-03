@@ -31,6 +31,7 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showColorPicker by remember { mutableStateOf(false) }
     var showStrokePicker by remember { mutableStateOf(false) }
+    var showFontSizePicker by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         DrawingCanvas(
@@ -42,6 +43,7 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
             onZoom = { centroid, zoom -> viewModel.onZoom(centroid, zoom) },
             onPan = { delta -> viewModel.onPan(delta) },
             onTextUpdate = { id, newText -> viewModel.updateTextElement(id, newText) },
+            onCancelText = { id -> viewModel.cancelTextElement(id) },  // নতুন লাইন
             onStickyNoteUpdate = { id, newText -> viewModel.updateStickyNote(id, newText) },
             onTextPositionUpdate = { id, newPos -> viewModel.updateTextPosition(id, newPos) },
             onStickyNotePositionUpdate = { id, newPos -> viewModel.updateStickyNotePosition(id, newPos) },
@@ -123,6 +125,23 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                 )
             }
 
+            AnimatedVisibility(
+                visible = showFontSizePicker,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
+            ) {
+                FontSizePicker(
+                    textSize = uiState.toolSettings.textSize,
+                    stickyNoteTextSize = uiState.toolSettings.stickyNoteTextSize,
+                    onTextSizeChange = { newSize ->
+                        viewModel.updateAllTextSizes(newSize)
+                    },
+                    onStickyNoteTextSizeChange = { newSize ->
+                        viewModel.updateAllStickyNoteSizes(newSize)
+                    }
+                )
+            }
+
             WhiteboardToolbar(
                 currentTool = uiState.toolSettings.selectedTool,
                 currentColor = uiState.toolSettings.strokeColor,
@@ -131,6 +150,7 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                 onToolSelected = { viewModel.selectTool(it) },
                 onColorClick = { showColorPicker = true },
                 onStrokeClick = { showStrokePicker = !showStrokePicker },
+                onFontSizeClick = { showFontSizePicker = !showFontSizePicker },
                 onUndo = { viewModel.undo() },
                 onRedo = { viewModel.redo() },
                 onClear = { viewModel.clearCanvas() }
@@ -237,6 +257,53 @@ fun StrokeSizePicker(currentWidth: Float, onWidthChange: (Float) -> Unit) {
 }
 
 @Composable
+fun FontSizePicker(
+    textSize: Float,
+    stickyNoteTextSize: Float,
+    onTextSizeChange: (Float) -> Unit,
+    onStickyNoteTextSizeChange: (Float) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Text Font Size: ${textSize.toInt()}sp",
+                style = MaterialTheme.typography.labelMedium
+            )
+            Slider(
+                value = textSize,
+                onValueChange = onTextSizeChange,
+                valueRange = 12f..48f,
+                steps = 8,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            HorizontalDivider()
+
+            Text(
+                text = "Sticky Note Font Size: ${stickyNoteTextSize.toInt()}sp",
+                style = MaterialTheme.typography.labelMedium
+            )
+            Slider(
+                value = stickyNoteTextSize,
+                onValueChange = onStickyNoteTextSizeChange,
+                valueRange = 10f..30f,
+                steps = 5,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
 fun WhiteboardToolbar(
     currentTool: DrawingTool,
     currentColor: Color,
@@ -245,6 +312,7 @@ fun WhiteboardToolbar(
     onToolSelected: (DrawingTool) -> Unit,
     onColorClick: () -> Unit,
     onStrokeClick: () -> Unit,
+    onFontSizeClick: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onClear: () -> Unit
@@ -311,6 +379,12 @@ fun WhiteboardToolbar(
                 icon = Icons.Default.LineWeight,
                 isSelected = false,
                 onClick = onStrokeClick
+            )
+
+            ToolButton(
+                icon = Icons.Default.FormatSize,
+                isSelected = false,
+                onClick = onFontSizeClick
             )
 
             ToolButton(

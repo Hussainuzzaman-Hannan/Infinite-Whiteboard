@@ -350,7 +350,8 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
             pageId = state.currentPageId,
             zIndex = currentZIndex,
             position = canvasPosition,
-            text = "New Note"
+            text = "New Note",
+            fontSize = state.toolSettings.stickyNoteTextSize
         )
         saveToUndoStack()
         _uiState.update { s ->
@@ -388,6 +389,7 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    // আপডেটেড - টেক্সট সেভ করার পর পেন টুলে স্যুইচ
     fun updateTextElement(elementId: String, newText: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -399,7 +401,24 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
                 canvasState = state.canvasState.copy(
                     elements = updatedElements,
                     selectedElementId = null
-                )
+                ),
+                toolSettings = state.toolSettings.copy(selectedTool = DrawingTool.Pen())
+            )
+        }
+    }
+
+    // নতুন - টেক্সট ক্যান্সেল করার ফাংশন
+    fun cancelTextElement(elementId: String) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.filter { element ->
+                !(element is TextElement && element.id == elementId && element.isEditing)
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(
+                    elements = updatedElements,
+                    selectedElementId = null
+                ),
+                toolSettings = state.toolSettings.copy(selectedTool = DrawingTool.Pen())
             )
         }
     }
@@ -417,7 +436,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // নতুন ফাংশন - টেক্সট পজিশন আপডেট
     fun updateTextPosition(elementId: String, newPosition: Offset) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -431,7 +449,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // নতুন ফাংশন - স্টিকি নোট পজিশন আপডেট
     fun updateStickyNotePosition(elementId: String, newPosition: Offset) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -447,6 +464,52 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
 
     fun shareCanvas() {
         _uiState.update { it.copy(exportSuccess = true) }
+    }
+
+    // ========== ফন্ট সাইজ ফাংশন ==========
+
+    fun updateTextSize(size: Float) {
+        _uiState.update { state ->
+            state.copy(
+                toolSettings = state.toolSettings.copy(textSize = size)
+            )
+        }
+    }
+
+    fun updateStickyNoteTextSize(size: Float) {
+        _uiState.update { state ->
+            state.copy(
+                toolSettings = state.toolSettings.copy(stickyNoteTextSize = size)
+            )
+        }
+    }
+
+    fun updateAllTextSizes(newSize: Float) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.map { element ->
+                if (element is TextElement) {
+                    element.copy(textSize = newSize)
+                } else element
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(elements = updatedElements),
+                toolSettings = state.toolSettings.copy(textSize = newSize)
+            )
+        }
+    }
+
+    fun updateAllStickyNoteSizes(newSize: Float) {
+        _uiState.update { state ->
+            val updatedElements = state.canvasState.elements.map { element ->
+                if (element is StickyNoteElement) {
+                    element.copy(fontSize = newSize)
+                } else element
+            }
+            state.copy(
+                canvasState = state.canvasState.copy(elements = updatedElements),
+                toolSettings = state.toolSettings.copy(stickyNoteTextSize = newSize)
+            )
+        }
     }
 
     private var autoSaveJob: kotlinx.coroutines.Job? = null

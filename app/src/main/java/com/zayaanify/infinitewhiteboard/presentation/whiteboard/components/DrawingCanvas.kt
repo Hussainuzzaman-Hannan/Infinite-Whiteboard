@@ -43,6 +43,7 @@ fun DrawingCanvas(
     onZoom: (Offset, Float) -> Unit,
     onPan: (Offset) -> Unit,
     onTextUpdate: (String, String) -> Unit = { _, _ -> },
+    onCancelText: (String) -> Unit = {},  // নতুন প্যারামিটার - টেক্সট ক্যান্সেলের জন্য
     onStickyNoteUpdate: (String, String) -> Unit = { _, _ -> },
     onTextPositionUpdate: (String, Offset) -> Unit = { _, _ -> },
     onStickyNotePositionUpdate: (String, Offset) -> Unit = { _, _ -> },
@@ -63,6 +64,9 @@ fun DrawingCanvas(
         editingTextId?.let { id ->
             if (editingTextValue.isNotEmpty()) {
                 onTextUpdate(id, editingTextValue)
+            } else {
+                // খালি টেক্সট হলে এলিমেন্ট ডিলিট করুন
+                onCancelText(id)
             }
         }
         editingTextId = null
@@ -72,6 +76,9 @@ fun DrawingCanvas(
     }
 
     fun cancelText() {
+        editingTextId?.let { id ->
+            onCancelText(id)
+        }
         editingTextId = null
         editingTextValue = ""
         showTextEditor = false
@@ -523,7 +530,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteEleme
         drawContext.canvas.nativeCanvas.apply {
             val paint = android.graphics.Paint().apply {
                 color = android.graphics.Color.BLACK
-                textSize = 14f
+                textSize = stickyNote.fontSize
                 isAntiAlias = true
             }
 
@@ -537,7 +544,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStickyNoteEleme
                         yOffset,
                         paint
                     )
-                    yOffset += 20f
+                    yOffset += stickyNote.fontSize + 6f
                 }
             }
         }
