@@ -1,7 +1,6 @@
 package com.zayaanify.infinitewhiteboard.data.local
 
 import androidx.room.*
-import com.zayaanify.infinitewhiteboard.domain.model.BoardPageEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao

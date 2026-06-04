@@ -1,7 +1,7 @@
 package com.zayaanify.infinitewhiteboard.data.repository
 
 import com.zayaanify.infinitewhiteboard.data.local.BoardPageDao
-import com.zayaanify.infinitewhiteboard.domain.model.BoardPageEntity
+import com.zayaanify.infinitewhiteboard.data.local.BoardPageEntity
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton

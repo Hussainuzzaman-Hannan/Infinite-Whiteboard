@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
 }
@@ -55,7 +56,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.ui:ui-text")  // BOM থেকে আসবে, আলাদা version দরকার নেই
+    implementation("androidx.compose.ui:ui-text")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
@@ -89,9 +90,6 @@ dependencies {
 
     // Splash Screen
     implementation("androidx.core:core-splashscreen:1.0.1")
-
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.ui:ui-tooling")
 
     // Test
     testImplementation("junit:junit:4.13.2")

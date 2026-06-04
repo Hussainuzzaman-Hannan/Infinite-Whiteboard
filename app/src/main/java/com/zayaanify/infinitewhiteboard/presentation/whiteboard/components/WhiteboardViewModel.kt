@@ -5,9 +5,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zayaanify.infinitewhiteboard.domain.model.*
+import com.zayaanify.infinitewhiteboard.data.local.BoardPageEntity
+import com.zayaanify.infinitewhiteboard.data.repository.WhiteboardRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 data class WhiteboardUiState(
@@ -32,20 +35,125 @@ data class WhiteboardUiState(
 }
 
 @HiltViewModel
-class WhiteboardViewModel @Inject constructor() : ViewModel() {
+class WhiteboardViewModel @Inject constructor(
+    private val repository: WhiteboardRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WhiteboardUiState())
     val uiState: StateFlow<WhiteboardUiState> = _uiState.asStateFlow()
 
     init {
-        val defaultPage = BoardPage(name = "Page 1", order = 0)
+        android.util.Log.d("WhiteboardDB", "ViewModel init - loading pages from database")
+        loadPagesFromDatabase()
+    }
+
+    private fun loadPagesFromDatabase() {
+        viewModelScope.launch {
+            try {
+                android.util.Log.d("WhiteboardDB", "loadPagesFromDatabase called")
+                repository.getAllPages().collect { entities ->
+                    android.util.Log.d("WhiteboardDB", "Loaded ${entities.size} pages from database")
+
+                    // Remove duplicates by ID - keep the latest one
+                    val uniqueEntities = entities
+                        .groupBy { it.id }
+                        .map { it.value.last() }
+                        .sortedBy { it.order }
+
+                    if (uniqueEntities.isNotEmpty()) {
+                        val boardPages = uniqueEntities.mapIndexed { index, entity ->
+                            BoardPage(
+                                id = entity.id,
+                                name = "Page ${index + 1}",
+                                order = index,
+                                createdAt = entity.createdAt,
+                                updatedAt = entity.updatedAt
+                            )
+                        }
+
+                        val firstPage = uniqueEntities.first()
+                        _uiState.update { state ->
+                            state.copy(
+                                pages = boardPages,
+                                currentPageId = firstPage.id,
+                                canvasState = state.canvasState.copy(
+                                    elements = firstPage.elements
+                                )
+                            )
+                        }
+                        android.util.Log.d("WhiteboardDB", "State updated with ${boardPages.size} pages")
+                    } else {
+                        createDefaultPage()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WhiteboardDB", "Load failed: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun createDefaultPage() {
+        val defaultPage = BoardPage(
+            id = UUID.randomUUID().toString(),
+            name = "Page 1",
+            order = 0
+        )
         _uiState.update { state ->
             state.copy(
                 pages = listOf(defaultPage),
                 currentPageId = defaultPage.id
             )
         }
+        android.util.Log.d("WhiteboardDB", "Default page created with ID: ${defaultPage.id}")
     }
+
+    private fun saveToDatabase() {
+        viewModelScope.launch {
+            try {
+                val state = _uiState.value
+                val uniquePages = state.pages.distinctBy { it.id }
+
+                uniquePages.forEachIndexed { index, page ->
+                    val pageElements = state.canvasState.elements.filter { it.pageId == page.id }
+                    val updatedPage = page.copy(order = index, name = "Page ${index + 1}")
+
+                    val entity = BoardPageEntity(
+                        id = updatedPage.id,
+                        name = updatedPage.name,
+                        order = updatedPage.order,
+                        createdAt = updatedPage.createdAt,
+                        updatedAt = System.currentTimeMillis(),
+                        elements = pageElements
+                    )
+                    repository.savePage(entity)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WhiteboardDB", "Save failed: ${e.message}", e)
+            }
+        }
+    }
+
+    fun manualSave() {
+        saveToDatabase()
+    }
+
+    fun clearAllData() {
+        viewModelScope.launch {
+            repository.deleteAllPages()
+            _uiState.update { state ->
+                state.copy(
+                    pages = emptyList(),
+                    currentPageId = "",
+                    canvasState = CanvasState(),
+                    undoStack = emptyList(),
+                    redoStack = emptyList()
+                )
+            }
+            createDefaultPage()
+        }
+    }
+
+    // ========== মূল ফাংশন ==========
 
     fun selectTool(tool: DrawingTool) {
         _uiState.update { state ->
@@ -174,10 +282,11 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
 
         saveToUndoStack()
 
+        val currentPageId = state.currentPageId
         val newElements = buildList {
             addAll(state.canvasState.elements)
-            state.canvasState.currentPath?.let { add(it) }
-            state.canvasState.currentShape?.let { add(it) }
+            state.canvasState.currentPath?.let { add(it.copy(pageId = currentPageId)) }
+            state.canvasState.currentShape?.let { add(it.copy(pageId = currentPageId)) }
         }
 
         _uiState.update { s ->
@@ -280,9 +389,10 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
 
     fun clearCanvas() {
         saveToUndoStack()
+        val currentPageId = _uiState.value.currentPageId
         _uiState.update { state ->
             val filteredElements = state.canvasState.elements
-                .filter { it.pageId != state.currentPageId }
+                .filter { it.pageId != currentPageId }
             state.copy(
                 canvasState = state.canvasState.copy(elements = filteredElements)
             )
@@ -290,20 +400,42 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
     }
 
     fun addPage() {
+        val currentPages = _uiState.value.pages
+        val newPageNumber = currentPages.size + 1
+
         val newPage = BoardPage(
-            name = "Page ${_uiState.value.pages.size + 1}",
-            order = _uiState.value.pages.size
+            id = UUID.randomUUID().toString(),
+            name = "Page $newPageNumber",
+            order = currentPages.size
         )
+
         _uiState.update { state ->
             state.copy(
                 pages = state.pages + newPage,
                 currentPageId = newPage.id
             )
         }
+        android.util.Log.d("WhiteboardDB", "addPage - New page created: ${newPage.name}, ID: ${newPage.id}")
     }
 
     fun switchPage(pageId: String) {
-        _uiState.update { it.copy(currentPageId = pageId) }
+        android.util.Log.d("WhiteboardDB", "switchPage called - to: $pageId")
+
+        val state = _uiState.value
+        val pageElements = state.canvasState.elements.filter { it.pageId == pageId }
+
+        _uiState.update { currentState ->
+            currentState.copy(
+                currentPageId = pageId,
+                canvasState = currentState.canvasState.copy(
+                    elements = pageElements,
+                    currentPath = null,
+                    currentShape = null
+                )
+            )
+        }
+
+        android.util.Log.d("WhiteboardDB", "switchPage completed - currentPageId: ${_uiState.value.currentPageId}, elements: ${pageElements.size}")
     }
 
     fun deletePage(pageId: String) {
@@ -421,7 +553,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // আপডেটেড - স্টিকি নোট সেভ করার পর পেন টুলে স্যুইচ
     fun updateStickyNote(elementId: String, newText: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.map { element ->
@@ -436,7 +567,6 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // নতুন - স্টিকি নোট ক্যান্সেল করার ফাংশন
     fun cancelStickyNoteElement(elementId: String) {
         _uiState.update { state ->
             val updatedElements = state.canvasState.elements.filter { element ->
@@ -534,6 +664,7 @@ class WhiteboardViewModel @Inject constructor() : ViewModel() {
         autoSaveJob?.cancel()
         autoSaveJob = viewModelScope.launch {
             kotlinx.coroutines.delay(2000)
+            saveToDatabase()
         }
     }
 }

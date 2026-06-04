@@ -1,9 +1,9 @@
-package com.zayaanify.infinitewhiteboard.domain.model
+package com.zayaanify.infinitewhiteboard.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
-import com.zayaanify.infinitewhiteboard.data.local.Converters
+import com.zayaanify.infinitewhiteboard.domain.model.CanvasElement
 
 @Entity(tableName = "board_pages")
 @TypeConverters(Converters::class)
@@ -14,5 +14,5 @@ data class BoardPageEntity(
     val order: Int,
     val createdAt: Long,
     val updatedAt: Long,
-    val elements: List<CanvasElement> // সব এলিমেন্ট JSON হিসেবে সংরক্ষিত হবে
+    val elements: List<CanvasElement>
 )
