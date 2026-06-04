@@ -1,4 +1,4 @@
-package com.zayaanify.infinitewhiteboard.presentation.whiteboard
+package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -71,17 +71,20 @@ class WhiteboardViewModel @Inject constructor(
                             )
                         }
 
+                        // সব পেজের elements একসাথে লোড করুন
+                        val allElements = uniqueEntities.flatMap { it.elements }
                         val firstPage = uniqueEntities.first()
+
                         _uiState.update { state ->
                             state.copy(
                                 pages = boardPages,
                                 currentPageId = firstPage.id,
                                 canvasState = state.canvasState.copy(
-                                    elements = firstPage.elements
+                                    elements = allElements
                                 )
                             )
                         }
-                        android.util.Log.d("WhiteboardDB", "State updated with ${boardPages.size} pages")
+                        android.util.Log.d("WhiteboardDB", "State updated with ${boardPages.size} pages, ${allElements.size} total elements")
                     } else {
                         createDefaultPage()
                     }
@@ -421,30 +424,31 @@ class WhiteboardViewModel @Inject constructor(
     fun switchPage(pageId: String) {
         android.util.Log.d("WhiteboardDB", "switchPage called - to: $pageId")
 
-        val state = _uiState.value
-        val pageElements = state.canvasState.elements.filter { it.pageId == pageId }
-
+        // সব পেজের elements অক্ষত রেখে শুধু currentPageId পরিবর্তন করুন
         _uiState.update { currentState ->
             currentState.copy(
                 currentPageId = pageId,
                 canvasState = currentState.canvasState.copy(
-                    elements = pageElements,
                     currentPath = null,
                     currentShape = null
                 )
             )
         }
 
-        android.util.Log.d("WhiteboardDB", "switchPage completed - currentPageId: ${_uiState.value.currentPageId}, elements: ${pageElements.size}")
+        android.util.Log.d("WhiteboardDB", "switchPage completed - currentPageId: ${_uiState.value.currentPageId}, totalElements: ${_uiState.value.canvasState.elements.size}")
     }
 
     fun deletePage(pageId: String) {
         val state = _uiState.value
         if (state.pages.size <= 1) return
 
+        val deletedIndex = state.pages.indexOfFirst { it.id == pageId }
         val newPages = state.pages.filter { it.id != pageId }
+
+        // মুছে ফেলা পেজের পরেরটায় যাবে, না থাকলে আগেরটায়
         val newCurrentPageId = if (state.currentPageId == pageId) {
-            newPages.first().id
+            val targetIndex = if (deletedIndex < newPages.size) deletedIndex else deletedIndex - 1
+            newPages[targetIndex].id
         } else {
             state.currentPageId
         }

@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zayaanify.infinitewhiteboard.domain.model.BoardPage
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.WhiteboardUiState
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.WhiteboardUiState
 
 @Composable
 fun PagePanel(

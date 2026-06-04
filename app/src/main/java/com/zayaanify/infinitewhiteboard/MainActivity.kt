@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.WhiteboardScreen
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.WhiteboardViewModel
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.WhiteboardScreen
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.WhiteboardViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

@@ -1,7 +1,6 @@
-package com.zayaanify.infinitewhiteboard.presentation.whiteboard
+package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
 import androidx.compose.animation.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zayaanify.infinitewhiteboard.domain.model.*
-import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.DrawingCanvas
+import com.zayaanify.infinitewhiteboard.presentation.whiteboard.components.WhiteboardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,7 +44,7 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
             onTextUpdate = { id, newText -> viewModel.updateTextElement(id, newText) },
             onCancelText = { id -> viewModel.cancelTextElement(id) },
             onStickyNoteUpdate = { id, newText -> viewModel.updateStickyNote(id, newText) },
-            onCancelStickyNote = { id -> viewModel.cancelStickyNoteElement(id) },  // নতুন লাইন
+            onCancelStickyNote = { id -> viewModel.cancelStickyNoteElement(id) },
             onTextPositionUpdate = { id, newPos -> viewModel.updateTextPosition(id, newPos) },
             onStickyNotePositionUpdate = { id, newPos -> viewModel.updateStickyNotePosition(id, newPos) },
             onCanvasTap = { offset -> viewModel.onCanvasTap(offset) },
@@ -83,10 +82,6 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Reset")
                 }
 
-                IconButton(onClick = { viewModel.addPage() }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Page")
-                }
-
                 IconButton(onClick = { viewModel.shareCanvas() }) {
                     Icon(Icons.Default.Share, contentDescription = "Share")
                 }
@@ -100,15 +95,13 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
             )
         }
 
-        if (uiState.pages.size > 1) {
-            PagePanel(
-                pages = uiState.pages,
-                currentPageId = uiState.currentPageId,
-                onPageSelected = { viewModel.switchPage(it) },
-                onPageDeleted = { viewModel.deletePage(it) },
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)
-            )
-        }
+        PagePanel(
+            uiState = uiState,
+            onAddPage = { viewModel.addPage() },
+            onSwitchPage = { viewModel.switchPage(it) },
+            onDeletePage = { viewModel.deletePage(it) },
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)
+        )
 
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
@@ -134,12 +127,8 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                 FontSizePicker(
                     textSize = uiState.toolSettings.textSize,
                     stickyNoteTextSize = uiState.toolSettings.stickyNoteTextSize,
-                    onTextSizeChange = { newSize ->
-                        viewModel.updateAllTextSizes(newSize)
-                    },
-                    onStickyNoteTextSizeChange = { newSize ->
-                        viewModel.updateAllStickyNoteSizes(newSize)
-                    }
+                    onTextSizeChange = { newSize -> viewModel.updateAllTextSizes(newSize) },
+                    onStickyNoteTextSizeChange = { newSize -> viewModel.updateAllStickyNoteSizes(newSize) }
                 )
             }
 
@@ -172,59 +161,11 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
 }
 
 @Composable
-fun PagePanel(
-    pages: List<BoardPage>,
-    currentPageId: String,
-    onPageSelected: (String) -> Unit,
-    onPageDeleted: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(modifier = modifier, shape = RoundedCornerShape(12.dp)) {
-        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            pages.forEach { page ->
-                PageThumbnail(
-                    page = page,
-                    isSelected = page.id == currentPageId,
-                    onClick = { onPageSelected(page.id) },
-                    onDelete = { onPageDeleted(page.id) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PageThumbnail(
-    page: BoardPage,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.size(60.dp, 80.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-    ) {
-        Box {
-            Text(
-                text = page.name,
-                modifier = Modifier.align(Alignment.Center),
-                style = MaterialTheme.typography.labelSmall
-            )
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
-            ) {
-                Icon(Icons.Default.Close, contentDescription = "Delete", modifier = Modifier.size(16.dp))
-            }
-        }
-    }
-}
-
-@Composable
 fun StrokeSizePicker(currentWidth: Float, onWidthChange: (Float) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), shape = RoundedCornerShape(12.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "Stroke Size: ${currentWidth.toInt()}px",
@@ -337,37 +278,31 @@ fun WhiteboardToolbar(
                 isSelected = currentTool is DrawingTool.Pen,
                 onClick = { onToolSelected(DrawingTool.Pen()) }
             )
-
             ToolButton(
                 icon = Icons.Default.Highlight,
                 isSelected = currentTool is DrawingTool.Highlighter,
                 onClick = { onToolSelected(DrawingTool.Highlighter()) }
             )
-
             ToolButton(
                 icon = Icons.Default.CropSquare,
                 isSelected = currentTool is DrawingTool.Shape.Rectangle,
                 onClick = { onToolSelected(DrawingTool.Shape.Rectangle()) }
             )
-
             ToolButton(
                 icon = Icons.Default.RadioButtonUnchecked,
                 isSelected = currentTool is DrawingTool.Shape.Circle,
                 onClick = { onToolSelected(DrawingTool.Shape.Circle()) }
             )
-
             ToolButton(
                 icon = Icons.Default.TextFields,
                 isSelected = currentTool is DrawingTool.Text,
                 onClick = { onToolSelected(DrawingTool.Text) }
             )
-
             ToolButton(
                 icon = Icons.Default.NoteAdd,
                 isSelected = currentTool is DrawingTool.StickyNote,
                 onClick = { onToolSelected(DrawingTool.StickyNote) }
             )
-
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -375,33 +310,28 @@ fun WhiteboardToolbar(
                     .background(currentColor)
                     .clickable { onColorClick() }
             )
-
             ToolButton(
                 icon = Icons.Default.LineWeight,
                 isSelected = false,
                 onClick = onStrokeClick
             )
-
             ToolButton(
                 icon = Icons.Default.FormatSize,
                 isSelected = false,
                 onClick = onFontSizeClick
             )
-
             ToolButton(
                 icon = Icons.Default.Undo,
                 isSelected = false,
                 onClick = onUndo,
                 enabled = canUndo
             )
-
             ToolButton(
                 icon = Icons.Default.Redo,
                 isSelected = false,
                 onClick = onRedo,
                 enabled = canRedo
             )
-
             ToolButton(
                 icon = Icons.Default.Delete,
                 isSelected = false,
@@ -418,10 +348,7 @@ fun ToolButton(
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled
-    ) {
+    IconButton(onClick = onClick, enabled = enabled) {
         Icon(
             imageVector = icon,
             contentDescription = null,
@@ -443,14 +370,15 @@ fun ColorPickerDialog(
 ) {
     val colors = listOf(
         Color.Black, Color.White, Color.Red, Color(0xFFFF9800), Color.Yellow,
-        Color.Green, Color.Blue, Color(0xFF9C27B0), Color(0xFFE91E63), Color.Cyan, Color.Gray, Color(0xFF795548)
+        Color.Green, Color.Blue, Color(0xFF9C27B0), Color(0xFFE91E63),
+        Color.Cyan, Color.Gray, Color(0xFF795548)
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "Select Color") },
         text = {
-            androidx.compose.foundation.layout.FlowRow(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -462,7 +390,8 @@ fun ColorPickerDialog(
                             .background(color)
                             .border(
                                 width = if (color == currentColor) 3.dp else 1.dp,
-                                color = if (color == currentColor) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                color = if (color == currentColor) MaterialTheme.colorScheme.primary
+                                else Color.Transparent,
                                 shape = CircleShape
                             )
                             .clickable { onColorSelected(color) }
