@@ -164,12 +164,14 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
 fun StrokeSizePicker(currentWidth: Float, onWidthChange: (Float) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
     ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "Stroke Size: ${currentWidth.toInt()}px",
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White
             )
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -178,7 +180,7 @@ fun StrokeSizePicker(currentWidth: Float, onWidthChange: (Float) -> Unit) {
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(Color(0xFF333333))
                             .clickable { onWidthChange(size) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -187,8 +189,8 @@ fun StrokeSizePicker(currentWidth: Float, onWidthChange: (Float) -> Unit) {
                                 .size(size.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (currentWidth == size) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    if (currentWidth == size) Color.White
+                                    else Color.Gray
                                 )
                         )
                     }
@@ -206,10 +208,9 @@ fun FontSizePicker(
     onStickyNoteTextSizeChange: (Float) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 32.dp),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -218,7 +219,8 @@ fun FontSizePicker(
         ) {
             Text(
                 text = "Text Font Size: ${textSize.toInt()}sp",
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White
             )
             Slider(
                 value = textSize,
@@ -227,12 +229,11 @@ fun FontSizePicker(
                 steps = 8,
                 modifier = Modifier.fillMaxWidth()
             )
-
-            HorizontalDivider()
-
+            HorizontalDivider(color = Color.Gray)
             Text(
                 text = "Sticky Note Font Size: ${stickyNoteTextSize.toInt()}sp",
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White
             )
             Slider(
                 value = stickyNoteTextSize,
@@ -264,7 +265,10 @@ fun WhiteboardToolbar(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .shadow(8.dp, RoundedCornerShape(32.dp)),
-        shape = RoundedCornerShape(32.dp)
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF1A1A1A)  // ডার্ক কার্ড
+        )
     ) {
         Row(
             modifier = Modifier
@@ -308,6 +312,7 @@ fun WhiteboardToolbar(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(currentColor)
+                    .border(2.dp, Color.White, CircleShape)  // সাদা বর্ডার
                     .clickable { onColorClick() }
             )
             ToolButton(
@@ -368,15 +373,21 @@ fun ColorPickerDialog(
     onColorSelected: (Color) -> Unit,
     onDismiss: () -> Unit
 ) {
+    // SoftBoard স্টাইলের হালকা রঙের প্যালেট
     val colors = listOf(
-        Color.Black, Color.White, Color.Red, Color(0xFFFF9800), Color.Yellow,
-        Color.Green, Color.Blue, Color(0xFF9C27B0), Color(0xFFE91E63),
-        Color.Cyan, Color.Gray, Color(0xFF795548)
+        Color.White,
+        Color(0xFFFF6B6B),  // লাইট লাল
+        Color(0xFFFFB347),  // কমলা
+        Color(0xFFFDFD97),  // লাইট ইয়েলো
+        Color(0xFFB5EAD7),  // লাইট গ্রিন
+        Color(0xFFA0D2FF),  // লাইট ব্লু
+        Color(0xFFD0B2FF),  // লাইট পার্পল
+        Color(0xFFE0E0E0)   // লাইট গ্রে
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Select Color") },
+        title = { Text(text = "Select Color", color = Color.White) },
         text = {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -390,8 +401,7 @@ fun ColorPickerDialog(
                             .background(color)
                             .border(
                                 width = if (color == currentColor) 3.dp else 1.dp,
-                                color = if (color == currentColor) MaterialTheme.colorScheme.primary
-                                else Color.Transparent,
+                                color = if (color == currentColor) Color.White else Color.Gray,
                                 shape = CircleShape
                             )
                             .clickable { onColorSelected(color) }
@@ -401,8 +411,9 @@ fun ColorPickerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = "Close")
+                Text(text = "Close", color = Color.White)
             }
-        }
+        },
+        containerColor = Color(0xFF1A1A1A)
     )
 }

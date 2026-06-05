@@ -4,10 +4,10 @@ import androidx.compose.ui.graphics.Color
 
 data class ToolSettings(
     val selectedTool: DrawingTool = DrawingTool.Pen(),
-    val strokeColor: Color = Color.Black,
+    val strokeColor: Color = Color.White,  // সাদা পেন (SoftBoard স্টাইল)
     val strokeWidth: Float = 5f,
-    val textColor: Color = Color.Black,
-    val textSize: Float = 24f,      // টেক্সটের জন্য ফন্ট সাইজ
-    val stickyNoteTextSize: Float = 14f,  // স্টিকি নোটের জন্য ফন্ট সাইজ
+    val textColor: Color = Color.White,    // সাদা টেক্সট
+    val textSize: Float = 24f,
+    val stickyNoteTextSize: Float = 14f,
     val opacity: Float = 1f
 )
