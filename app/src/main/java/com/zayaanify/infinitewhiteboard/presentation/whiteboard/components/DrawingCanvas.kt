@@ -1,5 +1,8 @@
 package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -231,13 +234,13 @@ fun DrawingCanvas(
                 .find { it.id == editingTextId }
 
             textElement?.let { element ->
-                var localOffset by remember { mutableStateOf(element.position) }
+                val screenPosition = canvasState.transform.canvasToScreen(element.position)
 
                 Card(
                     modifier = Modifier
                         .offset(
-                            x = with(density) { localOffset.x.toDp() },
-                            y = with(density) { localOffset.y.toDp() }
+                            x = with(density) { screenPosition.x.toDp() },
+                            y = with(density) { screenPosition.y.toDp() }
                         )
                         .width(250.dp)
                         .shadow(4.dp)
@@ -245,44 +248,51 @@ fun DrawingCanvas(
                             detectDragGestures(
                                 onDrag = { change, dragAmount ->
                                     change.consume()
-                                    localOffset = Offset(
-                                        localOffset.x + dragAmount.x / density.density,
-                                        localOffset.y + dragAmount.y / density.density
+                                    val newOffset = Offset(
+                                        element.position.x + dragAmount.x / density.density,
+                                        element.position.y + dragAmount.y / density.density
                                     )
-                                },
-                                onDragEnd = {
-                                    onTextPositionUpdate(element.id, localOffset)
+                                    onTextPositionUpdate(element.id, newOffset)
                                 }
                             )
-                        }
+                        },
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF2A2A2A)  // ডার্ক ব্যাকগ্রাউন্ড
+                    )
                 ) {
-                    Column(modifier = Modifier.background(Color.White)) {
+                    Column(
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        // Drag handle
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(24.dp)
-                                .background(Color.LightGray),
+                                .background(Color(0xFF3A3A3A)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("⋯", fontSize = 16.sp, color = Color.Gray)
+                            Text("⋯", fontSize = 16.sp, color = Color.White.copy(alpha = 0.6f))
                         }
 
+                        // Text input field with dark background and light text
                         BasicTextField(
                             value = editingTextValue,
                             onValueChange = { editingTextValue = it },
                             textStyle = TextStyle(
-                                color = element.color,
+                                color = Color.White,  // সাদা টেক্সট
                                 fontSize = element.textSize.sp,
-                                background = Color.White
+                                background = Color(0xFF2A2A2A)  // ডার্ক ব্যাকগ্রাউন্ড
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(100.dp)
                                 .padding(8.dp)
-                                .background(Color.White),
-                            singleLine = false
+                                .background(Color(0xFF2A2A2A)),
+                            singleLine = false,
+                            cursorBrush = SolidColor(Color.White)  // সাদা কার্সর
                         )
 
+                        // Buttons
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

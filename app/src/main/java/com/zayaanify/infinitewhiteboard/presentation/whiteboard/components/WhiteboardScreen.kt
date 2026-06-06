@@ -1,5 +1,7 @@
 package com.zayaanify.infinitewhiteboard.presentation.whiteboard.components
 
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,6 +56,7 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
         TopAppBar(
             title = { Text(uiState.currentPage?.name ?: "Infinite Whiteboard") },
             actions = {
+                // Undo Button
                 IconButton(
                     onClick = { viewModel.undo() },
                     enabled = uiState.canUndo
@@ -61,11 +64,11 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                     Icon(
                         Icons.Default.Undo,
                         contentDescription = "Undo",
-                        tint = if (uiState.canUndo) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        tint = if (uiState.canUndo) Color.White else Color.Gray
                     )
                 }
 
+                // Redo Button
                 IconButton(
                     onClick = { viewModel.redo() },
                     enabled = uiState.canRedo
@@ -73,17 +76,34 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
                     Icon(
                         Icons.Default.Redo,
                         contentDescription = "Redo",
-                        tint = if (uiState.canRedo) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        tint = if (uiState.canRedo) Color.White else Color.Gray
                     )
                 }
 
-                IconButton(onClick = { viewModel.resetView() }) {
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Reset")
+                // Delete/Clear Current Page Button (নতুন যোগ করা)
+                IconButton(
+                    onClick = { viewModel.clearCanvas() }
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Clear Page",
+                        tint = Color.White
+                    )
                 }
 
+                // Reset View Button
+                IconButton(onClick = { viewModel.resetView() }) {
+                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Reset", tint = Color.White)
+                }
+
+                // Add Page Button (যদি চান, নয়তো সরিয়ে দিন)
+                // IconButton(onClick = { viewModel.addPage() }) {
+                //     Icon(Icons.Default.Add, contentDescription = "Add Page", tint = Color.White)
+                // }
+
+                // Share Button
                 IconButton(onClick = { viewModel.shareCanvas() }) {
-                    Icon(Icons.Default.Share, contentDescription = "Share")
+                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
                 }
             }
         )
@@ -135,15 +155,10 @@ fun WhiteboardScreen(viewModel: WhiteboardViewModel) {
             WhiteboardToolbar(
                 currentTool = uiState.toolSettings.selectedTool,
                 currentColor = uiState.toolSettings.strokeColor,
-                canUndo = uiState.canUndo,
-                canRedo = uiState.canRedo,
                 onToolSelected = { viewModel.selectTool(it) },
                 onColorClick = { showColorPicker = true },
                 onStrokeClick = { showStrokePicker = !showStrokePicker },
-                onFontSizeClick = { showFontSizePicker = !showFontSizePicker },
-                onUndo = { viewModel.undo() },
-                onRedo = { viewModel.redo() },
-                onClear = { viewModel.clearCanvas() }
+                onFontSizeClick = { showFontSizePicker = !showFontSizePicker }
             )
         }
     }
@@ -250,97 +265,102 @@ fun FontSizePicker(
 fun WhiteboardToolbar(
     currentTool: DrawingTool,
     currentColor: Color,
-    canUndo: Boolean,
-    canRedo: Boolean,
     onToolSelected: (DrawingTool) -> Unit,
     onColorClick: () -> Unit,
     onStrokeClick: () -> Unit,
     onFontSizeClick: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    onClear: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .shadow(8.dp, RoundedCornerShape(32.dp)),
         shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1A1A1A)  // ডার্ক কার্ড
+            containerColor = Color(0xFF1A1A1A)
         )
     ) {
+        // প্রথম Row - ড্রইং টুলস
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // পেন
             ToolButton(
                 icon = Icons.Default.Brush,
                 isSelected = currentTool is DrawingTool.Pen,
                 onClick = { onToolSelected(DrawingTool.Pen()) }
             )
+            // হাইলাইটার
             ToolButton(
                 icon = Icons.Default.Highlight,
                 isSelected = currentTool is DrawingTool.Highlighter,
                 onClick = { onToolSelected(DrawingTool.Highlighter()) }
             )
+            // ইরেজার
+            ToolButton(
+                icon = Icons.Default.Edit,
+                isSelected = currentTool is DrawingTool.Eraser,
+                onClick = { onToolSelected(DrawingTool.Eraser()) }
+            )
+            // রেকট্যাঙ্গেল
             ToolButton(
                 icon = Icons.Default.CropSquare,
                 isSelected = currentTool is DrawingTool.Shape.Rectangle,
                 onClick = { onToolSelected(DrawingTool.Shape.Rectangle()) }
             )
+            // সার্কেল
             ToolButton(
                 icon = Icons.Default.RadioButtonUnchecked,
                 isSelected = currentTool is DrawingTool.Shape.Circle,
                 onClick = { onToolSelected(DrawingTool.Shape.Circle()) }
             )
+            // টেক্সট
             ToolButton(
                 icon = Icons.Default.TextFields,
                 isSelected = currentTool is DrawingTool.Text,
                 onClick = { onToolSelected(DrawingTool.Text) }
             )
+            // স্টিকি নোট
             ToolButton(
                 icon = Icons.Default.NoteAdd,
                 isSelected = currentTool is DrawingTool.StickyNote,
                 onClick = { onToolSelected(DrawingTool.StickyNote) }
             )
+        }
+
+        // দ্বিতীয় Row - কন্ট্রোল টুলস
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // কালার পিকার
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(currentColor)
-                    .border(2.dp, Color.White, CircleShape)  // সাদা বর্ডার
+                    .border(1.5.dp, Color.White, CircleShape)
                     .clickable { onColorClick() }
             )
+            // স্ট্রোক সাইজ
             ToolButton(
                 icon = Icons.Default.LineWeight,
                 isSelected = false,
                 onClick = onStrokeClick
             )
+            // ফন্ট সাইজ
             ToolButton(
                 icon = Icons.Default.FormatSize,
                 isSelected = false,
                 onClick = onFontSizeClick
-            )
-            ToolButton(
-                icon = Icons.Default.Undo,
-                isSelected = false,
-                onClick = onUndo,
-                enabled = canUndo
-            )
-            ToolButton(
-                icon = Icons.Default.Redo,
-                isSelected = false,
-                onClick = onRedo,
-                enabled = canRedo
-            )
-            ToolButton(
-                icon = Icons.Default.Delete,
-                isSelected = false,
-                onClick = onClear
             )
         }
     }
@@ -353,14 +373,18 @@ fun ToolButton(
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
-    IconButton(onClick = onClick, enabled = enabled) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(42.dp)
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = when {
-                !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                isSelected -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.onSurface
+                !enabled -> Color.Gray
+                isSelected -> Color(0xFFBB86FC)
+                else -> Color.White
             }
         )
     }

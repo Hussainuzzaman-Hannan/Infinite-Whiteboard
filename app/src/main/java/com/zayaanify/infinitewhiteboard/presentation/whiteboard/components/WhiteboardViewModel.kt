@@ -54,13 +54,10 @@ class WhiteboardViewModel @Inject constructor(
                 repository.getAllPages().collect { entities ->
                     android.util.Log.d("WhiteboardDB", "Loaded ${entities.size} pages from database")
 
-                    // Remove duplicates by ID - keep the latest one
-                    val uniqueEntities = entities
-                        .groupBy { it.id }
-                        .map { it.value.last() }
-                        .sortedBy { it.order }
+                    if (entities.isNotEmpty()) {
+                        // শুধুমাত্র unique ID এর পেজ নিন
+                        val uniqueEntities = entities.distinctBy { it.id }
 
-                    if (uniqueEntities.isNotEmpty()) {
                         val boardPages = uniqueEntities.mapIndexed { index, entity ->
                             BoardPage(
                                 id = entity.id,
@@ -71,20 +68,18 @@ class WhiteboardViewModel @Inject constructor(
                             )
                         }
 
-                        // সব পেজের elements একসাথে লোড করুন
-                        val allElements = uniqueEntities.flatMap { it.elements }
-                        val firstPage = uniqueEntities.first()
-
-                        _uiState.update { state ->
-                            state.copy(
-                                pages = boardPages,
-                                currentPageId = firstPage.id,
-                                canvasState = state.canvasState.copy(
-                                    elements = allElements
+                        val firstPage = uniqueEntities.firstOrNull()
+                        if (firstPage != null) {
+                            _uiState.update { state ->
+                                state.copy(
+                                    pages = boardPages,
+                                    currentPageId = firstPage.id,
+                                    canvasState = state.canvasState.copy(
+                                        elements = firstPage.elements
+                                    )
                                 )
-                            )
+                            }
                         }
-                        android.util.Log.d("WhiteboardDB", "State updated with ${boardPages.size} pages, ${allElements.size} total elements")
                     } else {
                         createDefaultPage()
                     }
@@ -440,15 +435,15 @@ class WhiteboardViewModel @Inject constructor(
 
     fun deletePage(pageId: String) {
         val state = _uiState.value
-        if (state.pages.size <= 1) return
+        if (state.pages.size <= 1) {
+            android.util.Log.d("WhiteboardDB", "Cannot delete last page")
+            return
+        }
 
-        val deletedIndex = state.pages.indexOfFirst { it.id == pageId }
+        // UI থেকে পেজ রিমুভ করুন
         val newPages = state.pages.filter { it.id != pageId }
-
-        // মুছে ফেলা পেজের পরেরটায় যাবে, না থাকলে আগেরটায়
         val newCurrentPageId = if (state.currentPageId == pageId) {
-            val targetIndex = if (deletedIndex < newPages.size) deletedIndex else deletedIndex - 1
-            newPages[targetIndex].id
+            newPages.first().id
         } else {
             state.currentPageId
         }
@@ -461,6 +456,21 @@ class WhiteboardViewModel @Inject constructor(
                     elements = s.canvasState.elements.filter { it.pageId != pageId }
                 )
             )
+        }
+
+        // ডাটাবেস থেকে পেজ ডিলিট করুন
+        viewModelScope.launch {
+            try {
+                // ডাটাবেস থেকে সরাসরি ডিলিট
+                val allEntities = repository.getAllPages().first()
+                val entityToDelete = allEntities.find { it.id == pageId }
+                if (entityToDelete != null) {
+                    repository.deletePage(entityToDelete)
+                    android.util.Log.d("WhiteboardDB", "Page $pageId deleted from database")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WhiteboardDB", "Delete page failed: ${e.message}", e)
+            }
         }
     }
 
